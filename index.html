@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2e7d32">
+<title>Ugnayan Gulayan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--pri:#2e7d32;--pri-d:#1b5e20;--bg:#f4f7f4;--card:#fff;--txt:#1b2a1d;--mut:#5f6f61;--line:#dfe7df;--pend:#f57f17;--ok:#2e7d32;--void:#c62828;--sh:0 1px 3px rgba(20,50,20,.12),0 1px 2px rgba(20,50,20,.08)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:Roboto,system-ui,sans-serif;background:var(--bg);color:var(--txt);padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+header{background:var(--pri);color:#fff;padding:calc(12px + env(safe-area-inset-top)) 16px 12px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:5;box-shadow:var(--sh)}
+header h1{font-size:18px;margin:0;font-weight:500}header small{display:block;opacity:.85;font-size:12px}
+main{max-width:960px;margin:0 auto;padding:16px}
+.card{background:var(--card);border-radius:12px;box-shadow:var(--sh);padding:16px;margin-bottom:14px}
+.card h2{font-size:16px;margin:0 0 10px;font-weight:500}
+.grid{display:grid;gap:14px}@media(min-width:760px){.grid.two{grid-template-columns:1fr 1fr}}
+button{font:inherit;min-height:48px;padding:0 20px;border-radius:24px;border:0;cursor:pointer;font-weight:500;background:var(--pri);color:#fff}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #81c784;outline-offset:2px}
+button.ghost{background:transparent;color:var(--pri);border:1px solid var(--line)}button.red{background:var(--void)}button.sm{min-height:48px;padding:0 16px}
+button.text{background:none;color:var(--pri);min-height:48px}
+input,select,textarea{font:inherit;width:100%;min-height:48px;padding:10px 12px;border:1px solid #b9c6b9;border-radius:8px;background:#fff;color:var(--txt)}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
+.chip{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:500;color:#fff}
+.chip.pending{background:var(--pend)}.chip.approved{background:var(--ok)}.chip.voided{background:var(--void)}.chip.warn{background:#fff3e0;color:#e65100}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.sp{justify-content:space-between}.grow{flex:1}
+.mut{color:var(--mut);font-size:13px}.log{padding:12px 0;border-top:1px solid var(--line)}.log:first-child{border-top:0}
+.ring{display:block;margin:6px auto}.ring text{font-family:Roboto}
+.hero{text-align:center}.hero .std{margin-top:4px}
+.clock{position:sticky;bottom:calc(14px + env(safe-area-inset-bottom));z-index:4}
+.clock button{width:100%;min-height:64px;font-size:20px;border-radius:32px;box-shadow:0 4px 14px rgba(20,60,20,.35)}
+nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:6}
+nav button{flex:1;background:none;color:var(--mut);border-radius:0;min-height:60px;font-size:12px;position:relative}
+nav button.on{color:var(--pri);box-shadow:inset 0 3px 0 var(--pri)}
+.badge{background:var(--void);color:#fff;border-radius:10px;font-size:11px;padding:1px 6px;margin-left:4px}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center;z-index:20}
+#modal.show{display:flex}.sheet{background:#fff;width:100%;max-width:560px;border-radius:20px 20px 0 0;padding:20px;max-height:90vh;overflow:auto}
+@media(min-width:760px){#modal{align-items:center}.sheet{border-radius:16px}}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:100px;background:#263238;color:#fff;padding:12px 18px;border-radius:8px;z-index:30;display:none}
+.center{min-height:80vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:14px;padding:20px}
+.center .card{width:100%;max-width:420px;text-align:left}
+.bar{height:8px;background:#e3ebe3;border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--pri)}
+@media(prefers-reduced-motion:no-preference){button{transition:filter .15s}button:active{filter:brightness(.9)}}
+</style>
+</head>
+<body>
+<header id="hdr" hidden><div><h1>Ugnayan Gulayan</h1><small id="sub"></small></div><button class="ghost" style="color:#fff;border-color:#ffffff66;min-height:40px" onclick="A.logout()">Sign out</button></header>
+<main id="app"><div class="center">Loading…</div></main>
+<nav id="nav" hidden></nav>
+<div id="modal" onclick="if(event.target===this)A.close()"><div class="sheet" id="sheet"></div></div>
+<div id="toast"></div>
+
+<script type="module">
+/* ============ CONFIGURATION: paste your NEW Firebase project's config here ============ */
+const firebaseConfig = {
+  apiKey: "AIzaSyCUsIydJpEClSyKKavQ1QQsC1qU4s-So_4",
+  authDomain: "farm-points-7ceb5.firebaseapp.com",
+  projectId: "farm-points-7ceb5",
+  storageBucket: "farm-points-7ceb5.firebasestorage.app",
+  messagingSenderId: "204725381372",
+  appId: "1:204725381372:web:f57b2a49a1d82364f1cf79"
+};
+const ADMIN_EMAIL = "admin@lla.edu", LIAISON_EMAIL = "farm@lla.edu";
+/* ====================================================================================== */
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {getAuth,onAuthStateChanged,signInWithPopup,GoogleAuthProvider,signInWithEmailAndPassword,signOut} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {getFirestore,doc,collection,onSnapshot,setDoc,updateDoc,deleteDoc,addDoc,getDocs,query,where,writeBatch} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
+const DEF={targetStandard:120,targetAdjusted:90,pointsPerDay:8,onTrackStandard:75,onTrackAdjusted:60,directory:{}};
+const S={user:null,role:null,profile:undefined,hh:{},att:[],users:[],cfg:{...DEF},tab:'approvals',unsubs:[],timer:null,showStaff:false};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const isStaff=()=>S.role==='admin'||S.role==='liaison';
+const pad=n=>String(n).padStart(2,'0');
+const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const fmtT=iso=>iso?new Date(iso).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):'—';
+const fmtD=s=>new Date(s+'T00:00').toLocaleDateString([], {month:'short',day:'numeric',year:'numeric'});
+const hrs=h=>{const m=Math.round(h*60);return `${Math.floor(m/60)}h ${pad(m%60)}m`};
+const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',3000)};
+const guard=fn=>async(...a)=>{try{return await fn(...a)}catch(e){console.error(e);toast('Error: '+(e.code||e.message))}};
+
+/* ---------- derived data ---------- */
+const pts=id=>S.att.filter(a=>a.hhId===id&&a.status==='approved').reduce((s,a)=>s+(a.points||0),0);
+const target=h=>h?.targetType==='adjusted'?S.cfg.targetAdjusted:S.cfg.targetStandard;
+function standing(h,p){const t=target(h),mid=h?.targetType==='adjusted'?S.cfg.onTrackAdjusted:S.cfg.onTrackStandard;
+  return p>=t?['In Good Standing','approved']:p>=mid?['On Track','pending']:['Needs Support','voided']}
+const hhName=id=>S.hh[id]?.name||S.cfg.directory?.[id]||id;
+
+/* ---------- auth + subscriptions ---------- */
+function clearSubs(){S.unsubs.forEach(u=>u());S.unsubs=[];clearInterval(S.timer)}
+const sub=(ref,cb)=>S.unsubs.push(onSnapshot(ref,cb,e=>{console.error(e);toast('Permission or network error: '+e.code)}));
+onAuthStateChanged(auth,user=>{
+  clearSubs();S.user=user;S.profile=undefined;S.hh={};S.att=[];S.users=[];
+  if(!user){S.role=null;return render()}
+  const em=(user.email||'').toLowerCase();
+  S.role=em===ADMIN_EMAIL?'admin':em===LIAISON_EMAIL?'liaison':'parent';
+  sub(doc(db,'config','program'),s=>{S.cfg={...DEF,...(s.data()||{})};render()});
+  if(isStaff()){
+    S.profile={status:'active'};
+    sub(collection(db,'households'),s=>{S.hh={};s.forEach(d=>S.hh[d.id]=d.data());render()});
+    sub(collection(db,'attendance'),s=>{S.att=s.docs.map(d=>({id:d.id,...d.data()}));render()});
+    sub(collection(db,'users'),s=>{S.users=s.docs.map(d=>({id:d.id,...d.data()}));render()});
+  }else{
+    sub(doc(db,'users',user.uid),s=>{
+      S.profile=s.exists()?s.data():null;
+      if(S.profile?.status==='active'&&S.profile.householdId&&!S._hhSub){
+        S._hhSub=true;const id=S.profile.householdId;
+        sub(doc(db,'households',id),x=>{S.hh={[id]:x.data()};render()});
+        sub(query(collection(db,'attendance'),where('hhId','==',id)),x=>{S.att=x.docs.map(d=>({id:d.id,...d.data()}));render()});
+      }
+      render();
+    });
+  }
+});
+
+/* ---------- rendering ---------- */
+function render(){
+  const app=$('#app'),nav=$('#nav'),hdr=$('#hdr');
+  clearInterval(S.timer);
+  if(!S.user){hdr.hidden=nav.hidden=true;return app.innerHTML=loginView()}
+  if(S.profile===undefined){hdr.hidden=nav.hidden=true;return app.innerHTML='<div class="center">Loading…</div>'}
+  hdr.hidden=false;
+  $('#sub').textContent=S.user.email+' · '+({admin:'Admin',liaison:'Farm Liaison',parent:'Household'}[S.role]);
+  if(isStaff()){nav.hidden=false;return staffView()}
+  nav.hidden=true;
+  if(!S.profile)return app.innerHTML=claimView();
+  if(S.profile.status!=='active')return app.innerHTML=`<div class="center"><div style="font-size:56px">🌱</div><h2>Waiting for approval</h2><p class="mut" style="max-width:320px">Your request to join household <b>${esc(hhName(S.profile.householdId))}</b> was sent. The Farm Liaison will confirm it. This screen updates by itself.</p><button class="ghost" onclick="A.cancelClaim()">Choose a different household</button></div>`;
+  parentView();
+}
+function loginView(){return `<div class="center"><div style="font-size:64px">🥬</div><h1 style="margin:0;color:var(--pri-d)">Ugnayan Gulayan</h1><p class="mut">Farm attendance and points for Noah Scholarship households</p>
+<button style="width:100%;max-width:340px;min-height:56px" onclick="A.google()">Sign in with Google</button>
+${S.showStaff?`<div class="card"><h2>Staff sign in</h2><label>Email</label><input id="em" type="email" autocomplete="username"><label>Password</label><input id="pw" type="password" autocomplete="current-password"><div style="margin-top:14px"><button style="width:100%" onclick="A.emailLogin()">Sign in</button></div></div>`:`<button class="text" onclick="S_.showStaff=true;A.r()">Staff sign in</button>`}</div>`}
+function claimView(){
+  const dir=Object.entries(S.cfg.directory||{}).sort();
+  return `<div class="center"><div class="card"><h2>Claim your household</h2><p class="mut">Select your family name from the list.</p>
+  ${dir.length?`<select id="hhSel"><option value="">Choose…</option>${dir.map(([id,n])=>`<option value="${id}">${esc(n)} (${id})</option>`).join('')}</select><div style="margin-top:14px"><button style="width:100%" onclick="A.claim()">Send request</button></div>`:`<p>The household list isn't loaded yet. Ask the Admin to import the scholar data.</p>`}</div></div>`}
+
+function logHtml(a,opts={}){
+  const low=a.durationHours<2&&a.status==='pending';
+  return `<div class="log"><div class="row sp"><b>${opts.hh?esc(hhName(a.hhId))+' · ':''}${fmtD(a.date)}</b><span class="chip ${a.status}">${a.status}${a.status==='approved'?' +'+a.points:''}</span></div>
+  <div class="mut">${fmtT(a.timeIn)} – ${fmtT(a.timeOut)} · ${hrs(a.durationHours||0)}${a.note?' · '+esc(a.note):''}</div>
+  ${low?'<span class="chip warn">Under 2 hours: earns 0 points</span>':''}${opts.actions||''}</div>`}
+
+function parentView(){
+  const id=S.profile.householdId,h=S.hh[id]||{},p=pts(id),t=target(h),[st,cls]=standing(h,p);
+  const open=S.profile.activeClockIn,C=2*Math.PI*90,frac=Math.min(p/t,1);
+  const mine=[...S.att].sort((a,b)=>b.timeIn>a.timeIn?1:-1);
+  $('#app').innerHTML=`<div class="card hero"><div class="mut">${esc(h.barangay||'')}</div><h2 style="font-size:22px">${esc(h.name||id)} household</h2>
+  <svg class="ring" width="220" height="220" viewBox="0 0 220 220" role="img" aria-label="${p} of ${t} points"><circle cx="110" cy="110" r="90" fill="none" stroke="#e3ebe3" stroke-width="16"/><circle cx="110" cy="110" r="90" fill="none" stroke="#2e7d32" stroke-width="16" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-frac)}" transform="rotate(-90 110 110)"/><text x="110" y="112" text-anchor="middle" font-size="48" font-weight="700" fill="#1b5e20">${p}</text><text x="110" y="140" text-anchor="middle" font-size="15" fill="#5f6f61">of ${t} points</text></svg>
+  <span class="chip ${cls}" style="font-size:14px;padding:5px 14px">${st}</span>
+  <p class="mut std">${h.targetType==='adjusted'?'Adjusted target':'Standard target'} · ${Math.round(t/S.cfg.pointsPerDay)} work days${p>t?' · points above target are for recognition only':''}</p></div>
+  ${open?`<div class="card hero"><div class="mut">Working since ${fmtT(open)}</div><div id="tm" style="font-size:40px;font-weight:500">0:00:00</div><div class="mut" id="tmh"></div></div>`:''}
+  <div class="card"><h2>History</h2>${mine.length?mine.map(a=>logHtml(a)).join(''):'<p class="mut">No logs yet. Tap Clock in when you start work.</p>'}</div>
+  <div class="clock">${open?`<button class="red" onclick="A.clockOutModal()">CLOCK OUT</button>`:`<button onclick="A.clockIn()">CLOCK IN</button>`}</div>`;
+  if(open){const tick=()=>{const s=Math.max(0,Math.floor((Date.now()-new Date(open))/1000));$('#tm').textContent=`${Math.floor(s/3600)}:${pad(Math.floor(s/60)%60)}:${pad(s%60)}`;$('#tmh').textContent=s>=7200?'2-hour minimum reached':'Counts for points after 2 hours'};tick();S.timer=setInterval(tick,1000)}
+}
+
+function staffView(){
+  const pendL=S.att.filter(a=>a.status==='pending').sort((a,b)=>a.timeIn>b.timeIn?1:-1);
+  const pendU=S.users.filter(u=>u.status==='pending');
+  const n=pendL.length+pendU.length,adm=S.role==='admin';
+  const tabs=[['approvals','Approvals',n],['households','Households'],...(adm?[['users','Users'],['settings','Settings']]:[])];
+  if(!tabs.some(t=>t[0]===S.tab))S.tab='approvals';
+  $('#nav').innerHTML=tabs.map(([k,l,b])=>`<button class="${S.tab===k?'on':''}" onclick="S_.tab='${k}';A.r()">${l}${b?`<span class="badge">${b}</span>`:''}</button>`).join('');
+  let h='';
+  if(S.tab==='approvals'){
+    h+=`<div class="row sp" style="margin-bottom:12px"><h2 style="margin:0">${n?n+' waiting for review':'All caught up'}</h2><button onclick="A.manualModal()">+ Add log</button></div>`;
+    if(pendU.length)h+=`<div class="card"><h2>Households requesting access</h2>${pendU.map(u=>userRow(u)).join('')}</div>`;
+    h+=`<div class="card"><h2>Pending logs</h2>${pendL.length?pendL.map(a=>logHtml(a,{hh:1,actions:`<div class="row" style="margin-top:8px"><button class="sm" onclick="A.approve('${a.id}')">Approve</button><button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button></div>`})).join(''):'<p class="mut">No pending logs.</p>'}</div>`;
+  }else if(S.tab==='households'){
+    const list=Object.keys(S.hh).sort();
+    h+=`<div class="card"><h2>Households (${list.length})</h2>${list.length?list.map(id=>{const x=S.hh[id],p=pts(id),t=target(x),[st,c]=standing(x,p);
+      return `<div class="log" onclick="A.hhModal('${id}')" style="cursor:pointer"><div class="row sp"><b>${id} · ${esc(x.name)}</b><span class="chip ${c}">${st}</span></div><div class="mut">${esc(x.barangay||'')} · ${p}/${t} pts${x.targetType==='adjusted'?' · adjusted':''}</div><div class="bar"><i style="width:${Math.min(100,p/t*100)}%"></i></div></div>`}).join(''):'<p class="mut">No households yet.'+(adm?' Import the Excel file in Settings.':'')+'</p>'}</div>`;
+  }else if(S.tab==='users'){
+    const ps=S.users.filter(u=>u.role==='parent');
+    h+=`<div class="card"><h2>Household accounts</h2>${ps.length?ps.map(u=>userRow(u,true)).join(''):'<p class="mut">No sign-ins yet.</p>'}</div>`;
+  }else{
+    h+=`<div class="grid two"><div class="card"><h2>Targets</h2><label>Standard target (points)</label><input id="tS" type="number" value="${S.cfg.targetStandard}"><label>Adjusted target (points)</label><input id="tA" type="number" value="${S.cfg.targetAdjusted}"><label>Points per work day</label><input id="tP" type="number" value="${S.cfg.pointsPerDay}"><label>On Track from (standard / adjusted)</label><div class="row"><input id="oS" type="number" value="${S.cfg.onTrackStandard}" style="flex:1"><input id="oA" type="number" value="${S.cfg.onTrackAdjusted}" style="flex:1"></div><div style="margin-top:14px"><button onclick="A.saveCfg()">Save settings</button></div></div>
+    <div class="card"><h2>Excel</h2><p class="mut">Import the scholar sheet "Sorted by Barangay". Existing households keep their target type.</p><input id="xf" type="file" accept=".xlsx,.xls"><div class="row" style="margin-top:12px"><button onclick="A.importXlsx()">Import</button><button class="ghost" onclick="A.exportXlsx()">Export report</button></div></div></div>`;
+  }
+  $('#app').innerHTML=h;
+}
+function userRow(u,all){
+  const hh=S.hh[u.householdId],ok=hh&&hh.masterEmail&&hh.masterEmail.toLowerCase()===(u.email||'').toLowerCase();
+  return `<div class="log"><div class="row sp"><b>${esc(u.email)}</b><span class="chip ${u.status==='active'?'approved':'pending'}">${u.status}</span></div>
+  <div class="mut">Claims ${esc(u.householdId)} · ${esc(hhName(u.householdId))}</div>
+  <div style="font-size:13px;color:${ok?'var(--ok)':'var(--pend)'}">${ok?'✓ Matches the email on record':'⚠ Doesn\'t match the email on record'+(hh?.masterEmail?' ('+esc(hh.masterEmail)+')':'')}</div>
+  <div class="row" style="margin-top:8px">${u.status==='pending'?`<button class="sm" onclick="A.userSet('${u.id}','active')">Approve</button><button class="sm ghost" onclick="A.userDel('${u.id}')">Reject</button>`:S.role==='admin'?`<button class="sm ghost" onclick="A.userDel('${u.id}')">Remove access</button>`:''}</div></div>`}
+
+/* ---------- modals ---------- */
+const open_=h=>{$('#sheet').innerHTML=h;$('#modal').classList.add('show')};
+function hhModal(id){
+  const x=S.hh[id],logs=S.att.filter(a=>a.hhId===id).sort((a,b)=>b.timeIn>a.timeIn?1:-1),adm=S.role==='admin';
+  open_(`<div class="row sp"><h2 style="margin:0">${id} · ${esc(x.name)}</h2><button class="text" onclick="A.close()">Close</button></div>
+  <p class="mut">${esc(x.barangay||'')}<br>${esc(x.masterEmail||'no email on record')} · ${esc(x.contactNumber||'')}<br><b>${pts(id)}</b> / ${target(x)} points</p>
+  ${adm?`<label>Target type</label><select onchange="A.setTarget('${id}',this.value)"><option value="standard"${x.targetType!=='adjusted'?' selected':''}>Standard (${S.cfg.targetStandard})</option><option value="adjusted"${x.targetType==='adjusted'?' selected':''}>Adjusted (${S.cfg.targetAdjusted})</option></select>`:''}
+  <div class="row" style="margin:12px 0"><button class="sm" onclick="A.manualModal('${id}')">+ Add log</button></div>
+  ${logs.map(a=>logHtml(a,{actions:`<div class="row" style="margin-top:6px">${a.status!=='approved'?`<button class="sm" onclick="A.approve('${a.id}')">Approve</button>`:''}${a.status!=='voided'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button>`:''}${a.status!=='pending'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','pending')">Reopen</button>`:''}${adm?`<button class="sm ghost" onclick="A.delLog('${a.id}')">Delete</button>`:''}</div>`})).join('')||'<p class="mut">No logs yet.</p>'}`);
+}
+function manualModal(pre=''){
+  const now=new Date(),ids=Object.keys(S.hh).sort(),loc=d=>`${ymd(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const a=new Date(now);a.setHours(8,0,0,0);const b=new Date(now);b.setHours(10,0,0,0);
+  open_(`<h2>Add a log</h2><label>Household</label><select id="mH">${ids.map(i=>`<option value="${i}"${i===pre?' selected':''}>${i} · ${esc(S.hh[i].name)}</option>`).join('')}</select>
+  <label>Time in</label><input id="mI" type="datetime-local" value="${loc(a)}"><label>Time out</label><input id="mO" type="datetime-local" value="${loc(b)}">
+  <label>Note</label><input id="mN" placeholder="e.g. Weeding (forgot to clock out)">
+  <label class="row" style="color:var(--txt);font-size:15px"><input id="mA" type="checkbox" checked style="width:24px;min-height:24px"> Approve right away</label>
+  <div class="row" style="margin-top:14px"><button onclick="A.saveManual()">Save log</button><button class="ghost" onclick="A.close()">Cancel</button></div>`);
+}
+
+/* ---------- actions ---------- */
+const A=window.A={
+  r:render,close:()=>$('#modal').classList.remove('show'),
+  google:guard(()=>signInWithPopup(auth,new GoogleAuthProvider())),
+  emailLogin:guard(async()=>{try{await signInWithEmailAndPassword(auth,$('#em').value.trim(),$('#pw').value)}catch(e){toast('Check your email and password')}}),
+  logout:()=>{S._hhSub=false;signOut(auth)},
+  claim:guard(async()=>{const id=$('#hhSel').value;if(!id)return toast('Pick your family name');
+    await setDoc(doc(db,'users',S.user.uid),{email:S.user.email.toLowerCase(),role:'parent',householdId:id,status:'pending'})}),
+  cancelClaim:guard(async()=>{await deleteDoc(doc(db,'users',S.user.uid))}),
+  clockIn:guard(async()=>{await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:new Date().toISOString()});toast('Clocked in')}),
+  clockOutModal:()=>open_(`<h2>Clock out</h2><p class="mut">Worked ${hrs((Date.now()-new Date(S.profile.activeClockIn))/36e5)}</p><label>What did you work on?</label><input id="cn" placeholder="e.g. Weeding"><div class="row" style="margin-top:14px"><button class="red" onclick="A.clockOut()">Clock out and submit</button><button class="ghost" onclick="A.close()">Keep working</button></div>`),
+  clockOut:guard(async()=>{
+    const tin=new Date(S.profile.activeClockIn),tout=new Date(),dur=Math.round((tout-tin)/36e3)/100;
+    await addDoc(collection(db,'attendance'),{hhId:S.profile.householdId,date:ymd(tin),timeIn:tin.toISOString(),timeOut:tout.toISOString(),durationHours:dur,note:$('#cn').value.trim(),status:'pending',points:0,loggedBy:S.user.uid,approvedBy:''});
+    await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:null});A.close();toast('Submitted for approval')}),
+  approve:guard(async id=>{
+    const l=S.att.find(x=>x.id===id),ppd=S.cfg.pointsPerDay;let p=l.durationHours>=2?ppd:0,why='This log is under 2 hours.';
+    if(S.att.some(x=>x.id!==id&&x.hhId===l.hhId&&x.date===l.date&&x.status==='approved'&&x.points>0)){p=0;why='This household already earned points for this day (one work day counts once).'}
+    if(p===0&&!confirm(why+' Approve with 0 points?'))return;
+    await updateDoc(doc(db,'attendance',id),{status:'approved',points:p,approvedBy:S.user.email});toast(p?`Approved +${p}`:'Approved, 0 points')}),
+  setStatus:guard(async(id,s)=>{await updateDoc(doc(db,'attendance',id),{status:s,points:0,approvedBy:s==='pending'?'':S.user.email})}),
+  delLog:guard(async id=>{if(confirm('Delete this log permanently?'))await deleteDoc(doc(db,'attendance',id))}),
+  userSet:guard(async(id,s)=>{await updateDoc(doc(db,'users',id),{status:s})}),
+  userDel:guard(async id=>{if(confirm('Remove this account\'s access?'))await deleteDoc(doc(db,'users',id))}),
+  setTarget:guard(async(id,v)=>{await updateDoc(doc(db,'households',id),{targetType:v});toast('Target updated')}),
+  hhModal,manualModal,
+  saveManual:guard(async()=>{
+    const hh=$('#mH').value,i=new Date($('#mI').value),o=new Date($('#mO').value);
+    if(isNaN(i)||isNaN(o)||o<=i)return toast('Time out must be after time in');
+    const dur=Math.round((o-i)/36e3)/100,ok=$('#mA').checked;let p=0;
+    if(ok&&dur>=2&&!S.att.some(x=>x.hhId===hh&&x.date===ymd(i)&&x.status==='approved'&&x.points>0))p=S.cfg.pointsPerDay;
+    await addDoc(collection(db,'attendance'),{hhId:hh,date:ymd(i),timeIn:i.toISOString(),timeOut:o.toISOString(),durationHours:dur,note:$('#mN').value.trim(),status:ok?'approved':'pending',points:p,loggedBy:S.user.uid,approvedBy:ok?S.user.email:''});
+    A.close();toast(ok&&!p?'Saved with 0 points (under 2h or day already counted)':'Log saved')}),
+  saveCfg:guard(async()=>{const n=id=>+$(id).value;
+    await setDoc(doc(db,'config','program'),{targetStandard:n('#tS'),targetAdjusted:n('#tA'),pointsPerDay:n('#tP'),onTrackStandard:n('#oS'),onTrackAdjusted:n('#oA')},{merge:true});toast('Settings saved')}),
+  importXlsx:guard(async()=>{
+    const f=$('#xf').files[0];if(!f)return toast('Choose the Excel file first');
+    const wb=XLSX.read(await f.arrayBuffer()),ws=wb.Sheets['Sorted by Barangay']||wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{defval:''}).filter(r=>String(r['Scholar ID']).trim()&&String(r['Household ID']).trim());
+    if(!rows.length)return toast('No scholar rows found');
+    const existing={};(await getDocs(collection(db,'households'))).forEach(d=>existing[d.id]=d.data());
+    const g={};rows.forEach(r=>(g[String(r['Household ID']).trim()]??=[]).push(r));
+    const first=(rs,k)=>String(rs.map(r=>r[k]).find(v=>String(v).trim())??'').trim();
+    const phone=v=>/^9\d{9}$/.test(v)?'0'+v:v;
+    const b=writeBatch(db),dir={};
+    for(const [id,rs] of Object.entries(g)){
+      const name=String(rs[0]['Last Name']).trim();dir[id]=name;
+      const d={name,barangay:first(rs,'Barangay'),masterEmail:first(rs,'E-mail Address').toLowerCase(),contactNumber:phone(first(rs,'Contact Number'))};
+      if(!existing[id])d.targetType='standard';
+      b.set(doc(db,'households',id),d,{merge:true});
+    }
+    rows.forEach(r=>b.set(doc(db,'scholars',String(r['Scholar ID']).trim()),{householdId:String(r['Household ID']).trim(),firstName:String(r['First Name']).trim(),lastName:String(r['Last Name']).trim(),gradeLevel:String(r['Grade Level']).trim()}));
+    b.set(doc(db,'config','program'),{directory:dir,...Object.fromEntries(Object.entries(DEF).filter(([k])=>k!=='directory'&&S.cfg[k]===DEF[k]).map(([k])=>[k,DEF[k]]))},{merge:true});
+    await b.commit();toast(`Imported ${Object.keys(g).length} households, ${rows.length} scholars`)}),
+  exportXlsx:guard(()=>{
+    const sum=Object.keys(S.hh).sort().map(id=>{const h=S.hh[id],p=pts(id);return{'Household ID':id,Name:h.name,Barangay:h.barangay,Target:target(h),'Current Points':p,Standing:standing(h,p)[0]}});
+    const logs=[...S.att].sort((a,b)=>a.timeIn>b.timeIn?1:-1).map(a=>({Date:a.date,'Household ID':a.hhId,'Time In':fmtT(a.timeIn),'Time Out':fmtT(a.timeOut),Note:a.note,Points:a.points,Status:a.status}));
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(sum),'Household Summary');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(logs),'Attendance Logs');
+    XLSX.writeFile(wb,`ugnayan-gulayan-${ymd(new Date())}.xlsx`)})
+};
+window.S_=S;
+</script>
+</body>
+</html>
