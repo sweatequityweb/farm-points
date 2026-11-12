@@ -71,7 +71,7 @@ import {getAuth,onAuthStateChanged,signInWithPopup,GoogleAuthProvider,signInWith
 import {getFirestore,doc,collection,onSnapshot,setDoc,updateDoc,deleteDoc,addDoc,getDocs,query,where,writeBatch} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
-const DEF={targetStandard:120,targetAdjusted:90,pointsPerDay:8,onTrackStandard:75,onTrackAdjusted:60,directory:{},clockOpen:'04:00',clockClose:'19:00',maxShiftHours:8,slidesUrl:'',yearStart:'',terms:[{name:'Term 1',end:'',pct:33},{name:'Term 2',end:'',pct:66},{name:'Term 3',end:'',pct:100}]};
+const DEF={targetStandard:120,targetAdjusted:90,pointsPerDay:8,onTrackStandard:75,onTrackAdjusted:60,directory:{},clockOpen:'04:00',clockClose:'19:00',maxShiftHours:8,slidesUrl:'',yearStart:'',terms:[{name:'Term 1',end:'',pct:25},{name:'Term 2',end:'',pct:50},{name:'Term 3',end:'',pct:75},{name:'Term 4',end:'',pct:100}]};
 const S={user:null,role:null,profile:undefined,hh:{},att:[],users:[],cfg:{...DEF},tab:'approvals',unsubs:[],timer:null,showStaff:false,ptab:'home',podHh:{},podAtt:[],_pod:null};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -102,7 +102,7 @@ onAuthStateChanged(auth,user=>{
   if(!user){S.role=null;return render()}
   const em=(user.email||'').toLowerCase();
   S.role=em===ADMIN_EMAIL?'admin':em===LIAISON_EMAIL?'liaison':'parent';
-  sub(doc(db,'config','program'),s=>{S.cfg={...DEF,...(s.data()||{})};render()});
+  sub(doc(db,'config','program'),s=>{S.cfg={...DEF,...(s.data()||{})};const tt=S.cfg.terms||[];if(tt.length===3&&tt.every(t=>!t.end)&&tt.map(t=>t.pct).join()==='33,66,100')S.cfg.terms=DEF.terms;render()});
   if(isStaff()){
     S.profile={status:'active'};
     sub(collection(db,'households'),s=>{S.hh={};s.forEach(d=>S.hh[d.id]=d.data());render()});
@@ -188,7 +188,7 @@ function staffView(){
     h+=`<div class="card"><h2>Household accounts</h2>${ps.length?ps.map(u=>userRow(u,true)).join(''):'<p class="mut">No sign-ins yet.</p>'}</div>`;
   }else{
     h+=`<div class="grid two"><div class="card"><h2>Targets</h2><label>Standard target (points)</label><input id="tS" type="number" value="${S.cfg.targetStandard}"><label>Adjusted target (points)</label><input id="tA" type="number" value="${S.cfg.targetAdjusted}"><label>Points per work day</label><input id="tP" type="number" value="${S.cfg.pointsPerDay}"><label>On Track from (standard / adjusted)</label><div class="row"><input id="oS" type="number" value="${S.cfg.onTrackStandard}" style="flex:1"><input id="oA" type="number" value="${S.cfg.onTrackAdjusted}" style="flex:1"></div><div style="margin-top:14px"><button onclick="A.saveCfg()">Save settings</button></div></div>
-    <div class="card"><h2>Clock-in and program</h2><label>Clock-in opens</label><input id="cO" type="time" value="${S.cfg.clockOpen}"><label>Clock-in closes</label><input id="cC" type="time" value="${S.cfg.clockClose}"><label>Auto-close open sessions after (hours)</label><input id="cM" type="number" value="${S.cfg.maxShiftHours}"><label>Program year starts</label><input id="yS" type="date" value="${S.cfg.yearStart||''}"><label>Terms: name, end date, % of target due by then</label><div id="termsBox">${termsHtml()}</div><div class="row"><button class="ghost sm" onclick="A.addTerm()">+ Add term</button><button class="ghost sm" onclick="A.evenTerms()">Spread evenly</button></div><label>Google Slides link (shown to parents)</label><input id="sU" value="${esc(S.cfg.slidesUrl||'')}" placeholder="https://docs.google.com/presentation/d/..."><div style="margin-top:14px"><button onclick="A.saveCfg2()">Save</button></div></div>
+    <div class="card"><h2>Clock-in and program</h2><label>Clock-in opens</label><input id="cO" type="time" value="${S.cfg.clockOpen}"><label>Clock-in closes</label><input id="cC" type="time" value="${S.cfg.clockClose}"><label>Auto-close open sessions after (hours)</label><input id="cM" type="number" value="${S.cfg.maxShiftHours}"><label>Program year starts</label><input id="yS" type="date" value="${S.cfg.yearStart||''}"><label>Terms: name, end date, % of target due by then</label><div id="termsBox">${termsHtml()}</div><p class="mut" style="margin:4px 0 8px">End dates are optional for now. Terms without an end date are saved but not used yet.</p><div class="row"><button class="ghost sm" onclick="A.addTerm()">+ Add term</button><button class="ghost sm" onclick="A.evenTerms()">Spread evenly</button></div><label>Google Slides link (shown to parents)</label><input id="sU" value="${esc(S.cfg.slidesUrl||'')}" placeholder="https://docs.google.com/presentation/d/..."><div style="margin-top:14px"><button onclick="A.saveCfg2()">Save</button></div></div>
     <div class="card"><h2>Excel</h2><p class="mut">Import the scholar sheet "Sorted by Barangay". Existing households keep their target type.</p><input id="xf" type="file" accept=".xlsx,.xls"><div class="row" style="margin-top:12px"><button onclick="A.importXlsx()">Import</button><button class="ghost" onclick="A.exportXlsx()">Export report</button><button class="ghost" onclick="A.seedPods()">Load pods</button></div></div></div>`;
   }
   $('#app').innerHTML=h;
@@ -303,9 +303,11 @@ Object.assign(A,{
  setPod:guard(async(id,v)=>{await updateDoc(doc(db,'households',id),{pod:v.trim()});toast('Pod saved')}),
  seedPods:guard(async()=>{if(!confirm('Set pods from the Ugnayan Gulayan window table? This overwrites current pods.'))return;const b=writeBatch(db);let n=0;
    for(const [pod,l] of Object.entries(PODS))l.split(' ').forEach(id=>{if(S.hh[id]){b.update(doc(db,'households',id),{pod});n++}});await b.commit();toast(n+' households placed')}),
- saveCfg2:guard(async()=>{const terms=(S.td||S.cfg.terms||[]).map(t=>({name:String(t.name||'').trim(),end:t.end||'',pct:+t.pct})).sort((a,b)=>a.end>b.end?1:-1);
-   if(terms.some(t=>!t.name||!t.end||!(t.pct>0&&t.pct<=100)))return toast('Each term needs a name, an end date and a % from 1 to 100');
-   if(terms.length&&terms[terms.length-1].pct!==100&&!confirm('The last term is not 100% of the target. Save anyway?'))return;
+ saveCfg2:guard(async()=>{let terms=(S.td||S.cfg.terms||[]).map((t,i)=>({name:String(t.name||'').trim()||'Term '+(i+1),end:t.end||'',pct:+t.pct||0}));
+   const dated=terms.every(t=>t.end);
+   if(terms.some(t=>t.end&&!(t.pct>0&&t.pct<=100)))return toast('A term with an end date needs a % from 1 to 100');
+   if(dated)terms=terms.sort((a,b)=>a.end>b.end?1:-1);
+   if(dated&&terms.length&&terms[terms.length-1].pct!==100&&!confirm('The last term is not 100% of the target. Save anyway?'))return;
    await setDoc(doc(db,'config','program'),{clockOpen:$('#cO').value,clockClose:$('#cC').value,maxShiftHours:+$('#cM').value,yearStart:$('#yS').value,terms,slidesUrl:$('#sU').value.trim()},{merge:true});S.td=null;A.r();toast('Saved')}),
  editModal(id){const a=S.att.find(x=>x.id===id);open_(`<h2>Edit log · ${esc(hhName(a.hhId))}</h2><p class="mut">Correct this to the real time they arrived and left.</p><label>Time in</label><input id="eI" type="datetime-local" value="${loc(a.timeIn)}"><label>Time out</label><input id="eO" type="datetime-local" value="${loc(a.timeOut)}"><label>Note</label><input id="eN" value="${esc(a.note)}"><div class="row" style="margin-top:14px"><button onclick="A.saveEdit('${id}')">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
  saveEdit:guard(async id=>{const l=S.att.find(x=>x.id===id),i=new Date($('#eI').value),o=new Date($('#eO').value);if(isNaN(i)||isNaN(o)||o<=i)return toast('Time out must be after time in');
