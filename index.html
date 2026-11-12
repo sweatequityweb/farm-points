@@ -11,6 +11,7 @@
 <style>
 :root{--pri:#2e7d32;--pri-d:#1b5e20;--bg:#f4f7f4;--card:#fff;--txt:#1b2a1d;--mut:#5f6f61;--line:#dfe7df;--pend:#f57f17;--ok:#2e7d32;--void:#c62828;--sh:0 1px 3px rgba(20,50,20,.12),0 1px 2px rgba(20,50,20,.08)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}button:disabled{background:#9eb59f;cursor:not-allowed}.log a{display:inline-block;padding:12px 4px;color:var(--pri)}
 body{margin:0;font-family:Roboto,system-ui,sans-serif;background:var(--bg);color:var(--txt);padding-bottom:calc(84px + env(safe-area-inset-bottom))}
 header{background:var(--pri);color:#fff;padding:calc(12px + env(safe-area-inset-top)) 16px 12px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:5;box-shadow:var(--sh)}
 header h1{font-size:18px;margin:0;font-weight:500}header small{display:block;opacity:.85;font-size:12px}
@@ -70,8 +71,8 @@ import {getAuth,onAuthStateChanged,signInWithPopup,GoogleAuthProvider,signInWith
 import {getFirestore,doc,collection,onSnapshot,setDoc,updateDoc,deleteDoc,addDoc,getDocs,query,where,writeBatch} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
-const DEF={targetStandard:120,targetAdjusted:90,pointsPerDay:8,onTrackStandard:75,onTrackAdjusted:60,directory:{}};
-const S={user:null,role:null,profile:undefined,hh:{},att:[],users:[],cfg:{...DEF},tab:'approvals',unsubs:[],timer:null,showStaff:false};
+const DEF={targetStandard:120,targetAdjusted:90,pointsPerDay:8,onTrackStandard:75,onTrackAdjusted:60,directory:{},clockOpen:'04:00',clockClose:'19:00',maxShiftHours:8,slidesUrl:'',yearStart:'',terms:[{name:'Term 1',end:'',pct:33},{name:'Term 2',end:'',pct:66},{name:'Term 3',end:'',pct:100}]};
+const S={user:null,role:null,profile:undefined,hh:{},att:[],users:[],cfg:{...DEF},tab:'approvals',unsubs:[],timer:null,showStaff:false,ptab:'home',podHh:{},podAtt:[],_pod:null};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isStaff=()=>S.role==='admin'||S.role==='liaison';
@@ -86,15 +87,18 @@ const guard=fn=>async(...a)=>{try{return await fn(...a)}catch(e){console.error(e
 /* ---------- derived data ---------- */
 const pts=id=>S.att.filter(a=>a.hhId===id&&a.status==='approved').reduce((s,a)=>s+(a.points||0),0);
 const target=h=>h?.targetType==='adjusted'?S.cfg.targetAdjusted:S.cfg.targetStandard;
-function standing(h,p){const t=target(h),mid=h?.targetType==='adjusted'?S.cfg.onTrackAdjusted:S.cfg.onTrackStandard;
-  return p>=t?['In Good Standing','approved']:p>=mid?['On Track','pending']:['Needs Support','voided']}
+function standing(h,p){const t=target(h),mid=h?.targetType==='adjusted'?S.cfg.onTrackAdjusted:S.cfg.onTrackStandard,today=ymd(new Date()),T=(S.cfg.terms||[]).filter(x=>x.end).sort((a,b)=>a.end>b.end?1:-1);
+  if(!S.cfg.yearStart||today<S.cfg.yearStart)return['Not started',''];
+  if(!T.length||today>T[T.length-1].end)return p>=t?['In Good Standing','approved']:p>=mid?['On Track','pending']:['Needs Support','voided'];
+  const cur=T.find(x=>x.end>=today),thr=Math.round(t*cur.pct/100);
+  return p>=thr?['Met '+cur.name+' pace','approved']:p>=thr*0.6?['Close to pace','pending']:['Behind pace','voided']}
 const hhName=id=>S.hh[id]?.name||S.cfg.directory?.[id]||id;
 
 /* ---------- auth + subscriptions ---------- */
 function clearSubs(){S.unsubs.forEach(u=>u());S.unsubs=[];clearInterval(S.timer)}
 const sub=(ref,cb)=>S.unsubs.push(onSnapshot(ref,cb,e=>{console.error(e);toast('Permission or network error: '+e.code)}));
 onAuthStateChanged(auth,user=>{
-  clearSubs();S.user=user;S.profile=undefined;S.hh={};S.att=[];S.users=[];
+  clearSubs();S.user=user;S.profile=undefined;S.hh={};S.att=[];S.users=[];S.podHh={};S.podAtt=[];S._pod=null;S._hhSub=false;
   if(!user){S.role=null;return render()}
   const em=(user.email||'').toLowerCase();
   S.role=em===ADMIN_EMAIL?'admin':em===LIAISON_EMAIL?'liaison':'parent';
@@ -103,13 +107,17 @@ onAuthStateChanged(auth,user=>{
     S.profile={status:'active'};
     sub(collection(db,'households'),s=>{S.hh={};s.forEach(d=>S.hh[d.id]=d.data());render()});
     sub(collection(db,'attendance'),s=>{S.att=s.docs.map(d=>({id:d.id,...d.data()}));render()});
-    sub(collection(db,'users'),s=>{S.users=s.docs.map(d=>({id:d.id,...d.data()}));render()});
+    sub(collection(db,'users'),s=>{S.users=s.docs.map(d=>({id:d.id,...d.data()}));S.users.forEach(u=>sweep(u.id,u));render()});
   }else{
     sub(doc(db,'users',user.uid),s=>{
-      S.profile=s.exists()?s.data():null;
+      S.profile=s.exists()?s.data():null;sweep(user.uid,S.profile);
       if(S.profile?.status==='active'&&S.profile.householdId&&!S._hhSub){
         S._hhSub=true;const id=S.profile.householdId;
-        sub(doc(db,'households',id),x=>{S.hh={[id]:x.data()};render()});
+        sub(doc(db,'households',id),x=>{S.hh={[id]:x.data()};const pd=x.data()?.pod;
+          if(pd&&S._pod!==pd){S._pod=pd;
+            sub(query(collection(db,'households'),where('pod','==',pd)),y=>{S.podHh={};y.forEach(d=>S.podHh[d.id]=d.data());render()});
+            sub(query(collection(db,'attendance'),where('pod','==',pd)),y=>{S.podAtt=y.docs.map(d=>d.data());render()})}
+          render()});
         sub(query(collection(db,'attendance'),where('hhId','==',id)),x=>{S.att=x.docs.map(d=>({id:d.id,...d.data()}));render()});
       }
       render();
@@ -126,9 +134,10 @@ function render(){
   hdr.hidden=false;
   $('#sub').textContent=S.user.email+' · '+({admin:'Admin',liaison:'Farm Liaison',parent:'Household'}[S.role]);
   if(isStaff()){nav.hidden=false;return staffView()}
-  nav.hidden=true;
+  nav.hidden=true;nav.innerHTML='';
   if(!S.profile)return app.innerHTML=claimView();
   if(S.profile.status!=='active')return app.innerHTML=`<div class="center"><div style="font-size:56px">🌱</div><h2>Waiting for approval</h2><p class="mut" style="max-width:320px">Your request to join household <b>${esc(hhName(S.profile.householdId))}</b> was sent. The Farm Liaison will confirm it. This screen updates by itself.</p><button class="ghost" onclick="A.cancelClaim()">Choose a different household</button></div>`;
+  nav.hidden=false;nav.innerHTML=[['home','Home'],['pod','My pod'],['program','Program']].map(([k,l])=>`<button class="${S.ptab===k?'on':''}" onclick="S_.ptab='${k}';A.r()">${l}</button>`).join('');
   parentView();
 }
 function loginView(){return `<div class="center"><div style="font-size:64px">🥬</div><h1 style="margin:0;color:var(--pri-d)">Ugnayan Gulayan</h1><p class="mut">Farm attendance and points for Noah Scholarship households</p>
@@ -142,20 +151,19 @@ function claimView(){
 function logHtml(a,opts={}){
   const low=a.durationHours<2&&a.status==='pending';
   return `<div class="log"><div class="row sp"><b>${opts.hh?esc(hhName(a.hhId))+' · ':''}${fmtD(a.date)}</b><span class="chip ${a.status}">${a.status}${a.status==='approved'?' +'+a.points:''}</span></div>
-  <div class="mut">${fmtT(a.timeIn)} – ${fmtT(a.timeOut)} · ${hrs(a.durationHours||0)}${a.note?' · '+esc(a.note):''}</div>
-  ${low?'<span class="chip warn">Under 2 hours: earns 0 points</span>':''}${opts.actions||''}</div>`}
+  <div class="mut">${a.kind==='buyout'?'Buy-out · '+esc(a.item)+' · '+a.days+' day(s) equivalent':fmtT(a.timeIn)+' – '+fmtT(a.timeOut)+' · '+hrs(a.durationHours||0)+(a.note?' · '+esc(a.note):'')}</div>
+  ${low?'<span class="chip warn">Under 2 hours: earns 0 points</span>':''}${a.autoClosed?'<span class="chip warn">Auto-closed: times need checking</span>':''}${opts.actions||''}${isStaff()&&a.kind!=='buyout'?`<div><button class="text" onclick="A.editModal('${a.id}')">Edit times or note</button></div>`:''}</div>`}
 
-function parentView(){
+function parentView(){if(S.ptab==='program')return programView();if(S.ptab==='pod')return podView();
   const id=S.profile.householdId,h=S.hh[id]||{},p=pts(id),t=target(h),[st,cls]=standing(h,p);
   const open=S.profile.activeClockIn,C=2*Math.PI*90,frac=Math.min(p/t,1);
   const mine=[...S.att].sort((a,b)=>b.timeIn>a.timeIn?1:-1);
   $('#app').innerHTML=`<div class="card hero"><div class="mut">${esc(h.barangay||'')}</div><h2 style="font-size:22px">${esc(h.name||id)} household</h2>
   <svg class="ring" width="220" height="220" viewBox="0 0 220 220" role="img" aria-label="${p} of ${t} points"><circle cx="110" cy="110" r="90" fill="none" stroke="#e3ebe3" stroke-width="16"/><circle cx="110" cy="110" r="90" fill="none" stroke="#2e7d32" stroke-width="16" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-frac)}" transform="rotate(-90 110 110)"/><text x="110" y="112" text-anchor="middle" font-size="48" font-weight="700" fill="#1b5e20">${p}</text><text x="110" y="140" text-anchor="middle" font-size="15" fill="#5f6f61">of ${t} points</text></svg>
-  <span class="chip ${cls}" style="font-size:14px;padding:5px 14px">${st}</span>
-  <p class="mut std">${h.targetType==='adjusted'?'Adjusted target':'Standard target'} · ${Math.round(t/S.cfg.pointsPerDay)} work days${p>t?' · points above target are for recognition only':''}</p></div>
-  ${open?`<div class="card hero"><div class="mut">Working since ${fmtT(open)}</div><div id="tm" style="font-size:40px;font-weight:500">0:00:00</div><div class="mut" id="tmh"></div></div>`:''}
+  <p class="mut std">Every farm day adds to your points. Thank you for showing up!</p></div>
+  ${open?`<div class="card hero"><div class="mut">Working since ${fmtT(open)}</div><div id="tm" style="font-size:40px;font-weight:500">0:00:00</div><div class="mut" id="tmh"></div>${Date.now()-new Date(open)<3e5?`<button class="text" onclick="A.cancelIn()">Tapped by mistake? Cancel</button>`:''}</div>`:''}
   <div class="card"><h2>History</h2>${mine.length?mine.map(a=>logHtml(a)).join(''):'<p class="mut">No logs yet. Tap Clock in when you start work.</p>'}</div>
-  <div class="clock">${open?`<button class="red" onclick="A.clockOutModal()">CLOCK OUT</button>`:`<button onclick="A.clockIn()">CLOCK IN</button>`}</div>`;
+  <div class="clock">${open?`<button class="red" onclick="A.clockOutModal()">CLOCK OUT</button>`:clockBtn()}</div>`;
   if(open){const tick=()=>{const s=Math.max(0,Math.floor((Date.now()-new Date(open))/1000));$('#tm').textContent=`${Math.floor(s/3600)}:${pad(Math.floor(s/60)%60)}:${pad(s%60)}`;$('#tmh').textContent=s>=7200?'2-hour minimum reached':'Counts for points after 2 hours'};tick();S.timer=setInterval(tick,1000)}
 }
 
@@ -168,7 +176,7 @@ function staffView(){
   $('#nav').innerHTML=tabs.map(([k,l,b])=>`<button class="${S.tab===k?'on':''}" onclick="S_.tab='${k}';A.r()">${l}${b?`<span class="badge">${b}</span>`:''}</button>`).join('');
   let h='';
   if(S.tab==='approvals'){
-    h+=`<div class="row sp" style="margin-bottom:12px"><h2 style="margin:0">${n?n+' waiting for review':'All caught up'}</h2><button onclick="A.manualModal()">+ Add log</button></div>`;
+    h+=`<div class="row sp" style="margin-bottom:12px"><h2 style="margin:0">${n?n+' waiting for review':'All caught up'}</h2><span class="row"><button class="ghost" onclick="A.buyoutModal()">Buy-out</button><button onclick="A.manualModal()">+ Add log</button></span></div>`;
     if(pendU.length)h+=`<div class="card"><h2>Households requesting access</h2>${pendU.map(u=>userRow(u)).join('')}</div>`;
     h+=`<div class="card"><h2>Pending logs</h2>${pendL.length?pendL.map(a=>logHtml(a,{hh:1,actions:`<div class="row" style="margin-top:8px"><button class="sm" onclick="A.approve('${a.id}')">Approve</button><button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button></div>`})).join(''):'<p class="mut">No pending logs.</p>'}</div>`;
   }else if(S.tab==='households'){
@@ -180,7 +188,8 @@ function staffView(){
     h+=`<div class="card"><h2>Household accounts</h2>${ps.length?ps.map(u=>userRow(u,true)).join(''):'<p class="mut">No sign-ins yet.</p>'}</div>`;
   }else{
     h+=`<div class="grid two"><div class="card"><h2>Targets</h2><label>Standard target (points)</label><input id="tS" type="number" value="${S.cfg.targetStandard}"><label>Adjusted target (points)</label><input id="tA" type="number" value="${S.cfg.targetAdjusted}"><label>Points per work day</label><input id="tP" type="number" value="${S.cfg.pointsPerDay}"><label>On Track from (standard / adjusted)</label><div class="row"><input id="oS" type="number" value="${S.cfg.onTrackStandard}" style="flex:1"><input id="oA" type="number" value="${S.cfg.onTrackAdjusted}" style="flex:1"></div><div style="margin-top:14px"><button onclick="A.saveCfg()">Save settings</button></div></div>
-    <div class="card"><h2>Excel</h2><p class="mut">Import the scholar sheet "Sorted by Barangay". Existing households keep their target type.</p><input id="xf" type="file" accept=".xlsx,.xls"><div class="row" style="margin-top:12px"><button onclick="A.importXlsx()">Import</button><button class="ghost" onclick="A.exportXlsx()">Export report</button></div></div></div>`;
+    <div class="card"><h2>Clock-in and program</h2><label>Clock-in opens</label><input id="cO" type="time" value="${S.cfg.clockOpen}"><label>Clock-in closes</label><input id="cC" type="time" value="${S.cfg.clockClose}"><label>Auto-close open sessions after (hours)</label><input id="cM" type="number" value="${S.cfg.maxShiftHours}"><label>Program year starts</label><input id="yS" type="date" value="${S.cfg.yearStart||''}"><label>Terms: end date and % of target due by then</label>${(S.cfg.terms||[]).map((t,i)=>`<div class="row"><span style="width:60px">${esc(t.name)}</span><input id="te${i}" type="date" value="${t.end||''}" style="flex:1"><input id="tp${i}" type="number" value="${t.pct}" style="width:90px"></div>`).join('')}<label>Google Slides link (shown to parents)</label><input id="sU" value="${esc(S.cfg.slidesUrl||'')}" placeholder="https://docs.google.com/presentation/d/..."><div style="margin-top:14px"><button onclick="A.saveCfg2()">Save</button></div></div>
+    <div class="card"><h2>Excel</h2><p class="mut">Import the scholar sheet "Sorted by Barangay". Existing households keep their target type.</p><input id="xf" type="file" accept=".xlsx,.xls"><div class="row" style="margin-top:12px"><button onclick="A.importXlsx()">Import</button><button class="ghost" onclick="A.exportXlsx()">Export report</button><button class="ghost" onclick="A.seedPods()">Load pods</button></div></div></div>`;
   }
   $('#app').innerHTML=h;
 }
@@ -196,9 +205,9 @@ const open_=h=>{$('#sheet').innerHTML=h;$('#modal').classList.add('show')};
 function hhModal(id){
   const x=S.hh[id],logs=S.att.filter(a=>a.hhId===id).sort((a,b)=>b.timeIn>a.timeIn?1:-1),adm=S.role==='admin';
   open_(`<div class="row sp"><h2 style="margin:0">${id} · ${esc(x.name)}</h2><button class="text" onclick="A.close()">Close</button></div>
-  <p class="mut">${esc(x.barangay||'')}<br>${esc(x.masterEmail||'no email on record')} · ${esc(x.contactNumber||'')}<br><b>${pts(id)}</b> / ${target(x)} points</p>
+  <p class="mut">${esc(x.barangay||'')}<br>${esc(x.masterEmail||'no email on record')} · ${esc(x.contactNumber||'')}<br><b>${pts(id)}</b> / ${target(x)} points</p>${termRows(id,x)}
   ${adm?`<label>Target type</label><select onchange="A.setTarget('${id}',this.value)"><option value="standard"${x.targetType!=='adjusted'?' selected':''}>Standard (${S.cfg.targetStandard})</option><option value="adjusted"${x.targetType==='adjusted'?' selected':''}>Adjusted (${S.cfg.targetAdjusted})</option></select>`:''}
-  <div class="row" style="margin:12px 0"><button class="sm" onclick="A.manualModal('${id}')">+ Add log</button></div>
+  ${adm?`<label>Pod</label><input list="pods" value="${esc(x.pod||'')}" onchange="A.setPod('${id}',this.value)"><datalist id="pods">${[...new Set(Object.values(S.hh).map(v=>v.pod).filter(Boolean))].map(v=>`<option value="${esc(v)}">`).join('')}</datalist>`:`<p class="mut">Pod: ${esc(x.pod||'none')}</p>`}<div class="row" style="margin:12px 0"><button class="sm" onclick="A.manualModal('${id}')">+ Add log</button><button class="sm ghost" onclick="A.buyoutModal('${id}')">Buy-out</button></div>
   ${logs.map(a=>logHtml(a,{actions:`<div class="row" style="margin-top:6px">${a.status!=='approved'?`<button class="sm" onclick="A.approve('${a.id}')">Approve</button>`:''}${a.status!=='voided'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button>`:''}${a.status!=='pending'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','pending')">Reopen</button>`:''}${adm?`<button class="sm ghost" onclick="A.delLog('${a.id}')">Delete</button>`:''}</div>`})).join('')||'<p class="mut">No logs yet.</p>'}`);
 }
 function manualModal(pre=''){
@@ -220,11 +229,11 @@ const A=window.A={
   claim:guard(async()=>{const id=$('#hhSel').value;if(!id)return toast('Pick your family name');
     await setDoc(doc(db,'users',S.user.uid),{email:S.user.email.toLowerCase(),role:'parent',householdId:id,status:'pending'})}),
   cancelClaim:guard(async()=>{await deleteDoc(doc(db,'users',S.user.uid))}),
-  clockIn:guard(async()=>{await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:new Date().toISOString()});toast('Clocked in')}),
+  clockIn:guard(async()=>{if(!inWin())return toast('Clock-in is closed right now');if(!confirm('Start your work day now?'))return;await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:new Date().toISOString()});toast('Clocked in')}),
   clockOutModal:()=>open_(`<h2>Clock out</h2><p class="mut">Worked ${hrs((Date.now()-new Date(S.profile.activeClockIn))/36e5)}</p><label>What did you work on?</label><input id="cn" placeholder="e.g. Weeding"><div class="row" style="margin-top:14px"><button class="red" onclick="A.clockOut()">Clock out and submit</button><button class="ghost" onclick="A.close()">Keep working</button></div>`),
   clockOut:guard(async()=>{
     const tin=new Date(S.profile.activeClockIn),tout=new Date(),dur=Math.round((tout-tin)/36e3)/100;
-    await addDoc(collection(db,'attendance'),{hhId:S.profile.householdId,date:ymd(tin),timeIn:tin.toISOString(),timeOut:tout.toISOString(),durationHours:dur,note:$('#cn').value.trim(),status:'pending',points:0,loggedBy:S.user.uid,approvedBy:''});
+    await addDoc(collection(db,'attendance'),{hhId:S.profile.householdId,pod:S.hh[S.profile.householdId]?.pod||'',date:ymd(tin),timeIn:tin.toISOString(),timeOut:tout.toISOString(),durationHours:dur,note:$('#cn').value.trim(),status:'pending',points:0,loggedBy:S.user.uid,approvedBy:''});
     await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:null});A.close();toast('Submitted for approval')}),
   approve:guard(async id=>{
     const l=S.att.find(x=>x.id===id),ppd=S.cfg.pointsPerDay;let p=l.durationHours>=2?ppd:0,why='This log is under 2 hours.';
@@ -242,7 +251,7 @@ const A=window.A={
     if(isNaN(i)||isNaN(o)||o<=i)return toast('Time out must be after time in');
     const dur=Math.round((o-i)/36e3)/100,ok=$('#mA').checked;let p=0;
     if(ok&&dur>=2&&!S.att.some(x=>x.hhId===hh&&x.date===ymd(i)&&x.status==='approved'&&x.points>0))p=S.cfg.pointsPerDay;
-    await addDoc(collection(db,'attendance'),{hhId:hh,date:ymd(i),timeIn:i.toISOString(),timeOut:o.toISOString(),durationHours:dur,note:$('#mN').value.trim(),status:ok?'approved':'pending',points:p,loggedBy:S.user.uid,approvedBy:ok?S.user.email:''});
+    await addDoc(collection(db,'attendance'),{hhId:hh,pod:S.hh[hh]?.pod||'',date:ymd(i),timeIn:i.toISOString(),timeOut:o.toISOString(),durationHours:dur,note:$('#mN').value.trim(),status:ok?'approved':'pending',points:p,loggedBy:S.user.uid,approvedBy:ok?S.user.email:''});
     A.close();toast(ok&&!p?'Saved with 0 points (under 2h or day already counted)':'Log saved')}),
   saveCfg:guard(async()=>{const n=id=>+$(id).value;
     await setDoc(doc(db,'config','program'),{targetStandard:n('#tS'),targetAdjusted:n('#tA'),pointsPerDay:n('#tP'),onTrackStandard:n('#oS'),onTrackAdjusted:n('#oA')},{merge:true});toast('Settings saved')}),
@@ -267,10 +276,46 @@ const A=window.A={
     await b.commit();toast(`Imported ${Object.keys(g).length} households, ${rows.length} scholars`)}),
   exportXlsx:guard(()=>{
     const sum=Object.keys(S.hh).sort().map(id=>{const h=S.hh[id],p=pts(id);return{'Household ID':id,Name:h.name,Barangay:h.barangay,Target:target(h),'Current Points':p,Standing:standing(h,p)[0]}});
-    const logs=[...S.att].sort((a,b)=>a.timeIn>b.timeIn?1:-1).map(a=>({Date:a.date,'Household ID':a.hhId,'Time In':fmtT(a.timeIn),'Time Out':fmtT(a.timeOut),Note:a.note,Points:a.points,Status:a.status}));
+    const logs=[...S.att].sort((a,b)=>a.timeIn>b.timeIn?1:-1).map(a=>({Type:a.kind||'work',Date:a.date,'Household ID':a.hhId,'Time In':fmtT(a.timeIn),'Time Out':fmtT(a.timeOut),Note:a.note,Points:a.points,Status:a.status}));
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(sum),'Household Summary');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(logs),'Attendance Logs');
     XLSX.writeFile(wb,`ugnayan-gulayan-${ymd(new Date())}.xlsx`)})
 };
+
+const inWin=()=>{const n=new Date(),m=n.getHours()*60+n.getMinutes(),f=t=>{const[h,k]=String(t).split(':');return +h*60+ +k};return m>=f(S.cfg.clockOpen)&&m<f(S.cfg.clockClose)};
+const clockBtn=()=>inWin()?`<button onclick="A.clockIn()">CLOCK IN</button>`:`<button disabled>CLOCK IN</button><p class="mut" style="text-align:center;margin:6px 0 0">Clock-in is open ${S.cfg.clockOpen} to ${S.cfg.clockClose}</p>`;
+async function sweep(uid,u){if(!u?.activeClockIn||(Date.now()-new Date(u.activeClockIn))/36e5<S.cfg.maxShiftHours)return;
+  const tin=new Date(u.activeClockIn),tout=new Date(+tin+S.cfg.maxShiftHours*36e5);
+  try{await setDoc(doc(db,'attendance',`auto_${uid}_${tin.getTime()}`),{hhId:u.householdId,pod:S.hh[u.householdId]?.pod||'',date:ymd(tin),timeIn:tin.toISOString(),timeOut:tout.toISOString(),durationHours:+S.cfg.maxShiftHours,note:'Auto-closed: no clock-out',autoClosed:true,status:'pending',points:0,loggedBy:uid,approvedBy:''})}catch(e){}
+  try{await updateDoc(doc(db,'users',uid),{activeClockIn:null})}catch(e){}}
+function termRows(id,h){const T=(S.cfg.terms||[]).filter(x=>x.end),t=target(h),today=ymd(new Date());
+  return T.map(x=>{const thr=Math.round(t*x.pct/100),got=S.att.filter(a=>a.hhId===id&&a.status==='approved'&&a.date<=x.end).reduce((q,a)=>q+(a.points||0),0),closed=x.end<today,ok=got>=thr;
+    return `<div class="row sp mut"><span>${esc(x.name)} (by ${fmtD(x.end)}): ${thr} pts</span><b style="color:${ok?'var(--ok)':closed?'var(--void)':'var(--pend)'}">${ok?'Met':closed?'Not met':'In progress'}</b></div>`}).join('')}
+const slideEmbed=u=>{const m=String(u||'').match(/presentation\/d\/(e\/)?([\w-]+)/);return m?`https://docs.google.com/presentation/d/${m[1]||''}${m[2]}/embed?start=false&loop=false`:''};
+function programView(){const u=slideEmbed(S.cfg.slidesUrl);$('#app').innerHTML=`<div class="card"><h2>About the program</h2>${u?`<div style="position:relative;padding-top:56.25%;border-radius:8px;overflow:hidden"><iframe src="${esc(u)}" style="position:absolute;inset:0;width:100%;height:100%;border:0" allowfullscreen title="Program presentation"></iframe></div><p><a href="${esc(S.cfg.slidesUrl)}" target="_blank" rel="noopener">Open in Google Slides</a></p>`:'<p class="mut">The presentation has not been added yet.</p>'}</div>`}
+function podView(){const id=S.profile.householdId,pod=S.hh[id]?.pod;
+  if(!pod)return $('#app').innerHTML='<div class="card"><h2>My pod</h2><p class="mut">You have not been placed in a pod yet. The Farm Liaison will add you.</p></div>';
+  const ids=Object.keys(S.podHh).sort(),pp=i=>i===id?pts(i):S.podAtt.filter(a=>a.hhId===i&&a.status==='approved').reduce((q,a)=>q+(a.points||0),0);
+  $('#app').innerHTML=`<div class="card"><h2>${esc(pod)}</h2><p class="mut">Only people in your pod can see this. Use it to coordinate and help each other.</p>${ids.map(i=>{const x=S.podHh[i],p=pp(i),help=standing(x,p)[1]==='voided';return `<div class="log"><div class="row sp"><b>${esc(x.name)}${i===id?' (you)':''}</b>${help?'<span class="chip warn">Could use a hand</span>':''}</div><div class="mut">${esc(x.barangay||'')} · ${p} points</div>${i!==id?`<div class="row">${x.contactNumber?`<a href="tel:${esc(x.contactNumber)}">${esc(x.contactNumber)}</a>`:''}${x.masterEmail?`<a href="mailto:${esc(x.masterEmail)}">${esc(x.masterEmail)}</a>`:''}</div>`:''}</div>`}).join('')}</div>`}
+const PODS={'Mon AM':'H01 H10 H14 H15 H18 H30','Wed PM':'H02 H04 H28','Thu AM':'H24 H34','Thu PM':'H16 H21','Fri AM':'H17','Sat AM A':'H05 H06 H07 H09','Sat AM B':'H11 H12 H27 H31','Sun AM':'H20 H23 H29 H36','Sun PM':'H22 H33 H35'};
+const loc=iso=>{const d=new Date(iso);return `${ymd(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`};
+Object.assign(A,{
+ cancelIn:guard(async()=>{await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:null});toast('Cancelled')}),
+ setPod:guard(async(id,v)=>{await updateDoc(doc(db,'households',id),{pod:v.trim()});toast('Pod saved')}),
+ seedPods:guard(async()=>{if(!confirm('Set pods from the Ugnayan Gulayan window table? This overwrites current pods.'))return;const b=writeBatch(db);let n=0;
+   for(const [pod,l] of Object.entries(PODS))l.split(' ').forEach(id=>{if(S.hh[id]){b.update(doc(db,'households',id),{pod});n++}});await b.commit();toast(n+' households placed')}),
+ saveCfg2:guard(async()=>{const terms=(S.cfg.terms||[]).map((t,i)=>({name:t.name,end:$('#te'+i).value,pct:+$('#tp'+i).value}));
+   await setDoc(doc(db,'config','program'),{clockOpen:$('#cO').value,clockClose:$('#cC').value,maxShiftHours:+$('#cM').value,yearStart:$('#yS').value,terms,slidesUrl:$('#sU').value.trim()},{merge:true});toast('Saved')}),
+ editModal(id){const a=S.att.find(x=>x.id===id);open_(`<h2>Edit log · ${esc(hhName(a.hhId))}</h2><p class="mut">Correct this to the real time they arrived and left.</p><label>Time in</label><input id="eI" type="datetime-local" value="${loc(a.timeIn)}"><label>Time out</label><input id="eO" type="datetime-local" value="${loc(a.timeOut)}"><label>Note</label><input id="eN" value="${esc(a.note)}"><div class="row" style="margin-top:14px"><button onclick="A.saveEdit('${id}')">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
+ saveEdit:guard(async id=>{const l=S.att.find(x=>x.id===id),i=new Date($('#eI').value),o=new Date($('#eO').value);if(isNaN(i)||isNaN(o)||o<=i)return toast('Time out must be after time in');
+   const dur=Math.round((o-i)/36e3)/100;let p=0;if(l.status==='approved'){p=dur>=2?S.cfg.pointsPerDay:0;if(S.att.some(x=>x.id!==id&&x.hhId===l.hhId&&x.date===ymd(i)&&x.status==='approved'&&x.points>0))p=0}
+   await updateDoc(doc(db,'attendance',id),{date:ymd(i),timeIn:i.toISOString(),timeOut:o.toISOString(),durationHours:dur,note:$('#eN').value.trim(),points:p,autoClosed:false,editedBy:S.user.email});A.close();toast('Log updated')}),
+ buyoutModal(pre=''){const ids=Object.keys(S.hh).sort();open_(`<h2>Record a buy-out</h2><p class="mut">For households who gave materials, skills or services instead of a farm day. It does not add points.</p><label>Household</label><select id="bH">${ids.map(i=>`<option value="${i}"${i===pre?' selected':''}>${i} · ${esc(S.hh[i].name)}</option>`).join('')}</select><label>Date</label><input id="bD" type="date" value="${ymd(new Date())}"><label>What was given or done</label><input id="bI" placeholder="e.g. 20 kg compost, harvest delivery"><label>Work days it covers</label><input id="bN" type="number" step="0.5" value="1"><div class="row" style="margin-top:14px"><button onclick="A.saveBuyout()">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
+ saveBuyout:guard(async()=>{const hh=$('#bH').value,it=$('#bI').value.trim(),d=$('#bD').value;if(!it||!d)return toast('Add the date and what was given');const t=new Date(d+'T12:00').toISOString();
+   await addDoc(collection(db,'attendance'),{hhId:hh,pod:S.hh[hh]?.pod||'',date:d,kind:'buyout',item:it,days:+$('#bN').value,timeIn:t,timeOut:t,durationHours:0,note:it,status:'approved',points:0,loggedBy:S.user.uid,approvedBy:S.user.email});A.close();toast('Buy-out recorded')})
+});
+const ADM=['importXlsx','exportXlsx','saveCfg','saveCfg2','seedPods','setTarget','setPod','delLog','userDel'],STF=['approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
+ADM.forEach(k=>{const f=A[k];A[k]=(...a)=>S.role==='admin'?f(...a):null});
+STF.forEach(k=>{const f=A[k];A[k]=(...a)=>isStaff()?f(...a):null});
 window.S_=S;
 </script>
 </body>
