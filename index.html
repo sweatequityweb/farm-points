@@ -54,6 +54,12 @@ nav button.on{color:var(--pri);box-shadow:inset 0 3px 0 var(--pri)}
 .blk{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px 12px;margin-bottom:10px}.blk.drag{box-shadow:0 8px 22px rgba(0,0,0,.25);position:relative;z-index:3}
 .grip{touch-action:none;cursor:grab;font-size:28px;width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:var(--mut);user-select:none;flex:none}
 textarea{resize:vertical;min-height:96px}
+.chip.pod{background:#e8f5e9;color:var(--pri-d)}.chip.nopod{background:#eceff1;color:var(--mut)}
+.sch{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:500;background:#eef5ee;color:var(--pri-d);border:1px solid #cfe0cf}
+.slots{display:grid;grid-template-columns:minmax(84px,auto) 1fr 1fr;gap:8px;align-items:center}
+.slot{background:#fff;color:var(--mut);border:1px solid #b9c6b9;border-radius:12px;padding:0 8px}
+.slot.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.panel .panel{box-shadow:none;border:1px solid var(--line)}
 .md h2{font-size:20px;margin:14px 0 6px}.md h3{font-size:17px;margin:12px 0 4px}.md h4{font-size:15px;margin:10px 0 4px}.md p,.md li{line-height:1.55;margin:6px 0}.md blockquote{border-left:3px solid var(--line);margin:8px 0;padding-left:12px;color:var(--mut)}.md code{background:var(--bg);padding:1px 5px;border-radius:4px}.md hr{border:0;border-top:1px solid var(--line)}
 </style>
 </head>
@@ -78,11 +84,11 @@ const ADMIN_EMAIL = "admin@lla.edu", LIAISON_EMAIL = "farm@lla.edu";
 /* ====================================================================================== */
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {getAuth,onAuthStateChanged,signInWithPopup,GoogleAuthProvider,signInWithEmailAndPassword,signOut} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import {getFirestore,doc,collection,onSnapshot,setDoc,updateDoc,deleteDoc,addDoc,getDocs,query,where,writeBatch} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {getFirestore,doc,collection,onSnapshot,setDoc,updateDoc,deleteDoc,addDoc,getDocs,query,where,writeBatch,deleteField} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const DEF={targetStandard:120,targetAdjusted:90,pointsPerDay:8,onTrackStandard:75,onTrackAdjusted:60,directory:{},currentYear:'',yearEnd:'',pastYears:[],clockOpen:'04:00',clockClose:'19:00',maxShiftHours:8,slidesUrl:'',yearStart:'',terms:[{name:'Term 1',end:'',pct:25},{name:'Term 2',end:'',pct:50},{name:'Term 3',end:'',pct:75},{name:'Term 4',end:'',pct:100}]};
-const S={user:null,role:null,profile:undefined,hh:{},att:[],users:[],cfg:{...DEF},tab:'approvals',unsubs:[],timer:null,showStaff:false,open:{year:true},ptab:'home',podHh:{},podAtt:[],_pod:null};
+const S={user:null,role:null,profile:undefined,hh:{},att:[],users:[],cfg:{...DEF},tab:'approvals',unsubs:[],timer:null,showStaff:false,open:{year:true},ptab:'home',podHh:{},podAtt:[],_pod:null,podDraft:{},hsort:'id',hpod:'all'};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isStaff=()=>S.role==='admin'||S.role==='liaison';
@@ -107,6 +113,32 @@ function standing(h,p){const t=target(h),mid=h?.targetType==='adjusted'?S.cfg.on
   const cur=T.find(x=>x.end>=today),thr=Math.round(t*cur.pct/100);
   return p>=thr?['Met '+cur.name+' pace','approved']:p>=thr*0.6?['Close to pace','pending']:['Behind pace','voided']}
 const hhName=id=>S.hh[id]?.name||S.cfg.directory?.[id]||id;
+
+/* ---------- pods + availability helpers ---------- */
+const natCmp=(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true});
+const isNumPod=p=>/^\d+$/.test(String(p||''));
+const podLabel=p=>p?(isNumPod(p)?'Pod '+p:String(p)):'No pod';
+const podChip=p=>p?`<span class="chip pod">${esc(podLabel(p))}</span>`:'<span class="chip nopod">No pod</span>';
+const podNums=()=>{const t=new Set((S.cfg.pods||[]).map(String));Object.values(S.hh).forEach(h=>{if(isNumPod(h.pod))t.add(String(h.pod))});return[...t].sort((a,b)=>a-b)};
+const legacyPods=()=>[...new Set(Object.values(S.hh).map(h=>h.pod).filter(p=>p&&!isNumPod(p)))];
+const OLD_ORDER=['Mon AM','Wed PM','Thu AM','Thu PM','Fri AM','Sat AM A','Sat AM B','Sun AM','Sun PM'];
+const DAYS=[['Mon','Monday'],['Tue','Tuesday'],['Wed','Wednesday'],['Thu','Thursday'],['Fri','Friday'],['Sat','Saturday'],['Sun','Sunday']];
+const slotName=k=>{const[d,t]=k.split('-'),f=DAYS.find(x=>x[0]===d);return f?f[1]+' '+(t==='AM'?'morning':'afternoon'):k};
+const slotOrd=k=>{const[d,t]=k.split('-');return DAYS.findIndex(x=>x[0]===d)*2+(t==='PM'?1:0)};
+function availLabels(av){const s=new Set(av||[]);return DAYS.flatMap(([d])=>{const a=s.has(d+'-AM'),p=s.has(d+'-PM');return a&&p?[d+' all day']:a?[d+' morning']:p?[d+' afternoon']:[]})}
+const availChips=av=>{const L=availLabels(av);return L.length?L.map(l=>`<span class="sch">${l}</span>`).join(''):'<span class="mut">No schedule set</span>'};
+const availText=av=>{const L=availLabels(av);return L.length?'Available: '+L.join(', '):'No schedule set'};
+const slotGrid=(id,av)=>`<div class="slots">${DAYS.map(([d,full])=>`<span>${full}</span>${['AM','PM'].map(t=>{const k=d+'-'+t,on=(av||[]).includes(k);return `<button type="button" class="slot${on?' on':''}" data-k="${k}" aria-pressed="${on}" onclick="A.toggleSlot('${id}',this)">${t==='AM'?'Morning':'Afternoon'}</button>`}).join('')}`).join('')}</div>`;
+function glance(ids,map,card){const n=ids.length,cnt={};ids.forEach(i=>(map[i]?.availability||[]).forEach(k=>cnt[k]=(cnt[k]||0)+1));
+  const rows=Object.entries(cnt).sort((a,b)=>b[1]-a[1]||slotOrd(a[0])-slotOrd(b[0]));if(!rows.length)return'';
+  const body=rows.map(([k,c])=>`<div style="margin:8px 0"><div class="row sp"><span>${slotName(k)}</span><span class="mut">${c} of ${n}</span></div><div class="bar"><i style="width:${c/n*100}%"></i></div></div>`).join('');
+  return card?`<div class="card"><h2>When your pod is free</h2><p class="mut" style="margin-top:0">Times most podmates can come are listed first.</p>${body}</div>`:`<div style="margin-top:12px"><div class="mut"><b>Pod overlap</b></div>${body}</div>`}
+const SORTS={id:'Household ID',ptsDesc:'Most points',ptsAsc:'Fewest points',newest:'Newest added',name:'Name A\u2013Z',pod:'Pod'};
+function hhSorted(){let ids=Object.keys(S.hh);const P={};ids.forEach(i=>P[i]=pts(i));const f=S.hpod||'all',k=S.hsort||'id';
+  if(f==='none')ids=ids.filter(i=>!S.hh[i].pod);else if(f!=='all')ids=ids.filter(i=>String(S.hh[i].pod||'')===f);
+  const pn=i=>isNumPod(S.hh[i].pod)?+S.hh[i].pod:S.hh[i].pod?9998:9999;
+  const C={id:natCmp,ptsDesc:(a,b)=>P[b]-P[a]||natCmp(a,b),ptsAsc:(a,b)=>P[a]-P[b]||natCmp(a,b),newest:(a,b)=>(S.hh[b].createdAt||0)-(S.hh[a].createdAt||0)||natCmp(b,a),name:(a,b)=>String(S.hh[a].name||'').localeCompare(String(S.hh[b].name||''))||natCmp(a,b),pod:(a,b)=>pn(a)-pn(b)||natCmp(a,b)};
+  return{ids:ids.sort(C[k]||natCmp),P}}
 
 /* ---------- auth + subscriptions ---------- */
 function clearSubs(){S.unsubs.forEach(u=>u());S.unsubs=[];clearInterval(S.timer)}
@@ -183,7 +215,7 @@ function parentView(){if(S.ptab==='program')return programView();if(S.ptab==='po
 }
 
 function staffView(){
-  const ae=document.activeElement;if(S.tab==='settings'&&ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)&&ae.type!=='file'&&$('#app').contains(ae))return;
+  const ae=document.activeElement;if((S.tab==='settings'||S.tab==='households')&&ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)&&ae.type!=='file'&&$('#app').contains(ae))return;
   const pendL=S.att.filter(a=>a.status==='pending').sort((a,b)=>a.timeIn>b.timeIn?1:-1);
   const pendU=S.users.filter(u=>u.status==='pending');
   const n=pendL.length+pendU.length,adm=S.role==='admin';
@@ -196,9 +228,13 @@ function staffView(){
     if(pendU.length)h+=`<div class="card"><h2>Households requesting access</h2>${pendU.map(u=>userRow(u)).join('')}</div>`;
     h+=`<div class="card"><h2>Pending logs</h2>${pendL.length?pendL.map(a=>logHtml(a,{hh:1,actions:`<div class="row" style="margin-top:8px"><button class="sm" onclick="A.approve('${a.id}')">Approve</button><button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button></div>`})).join(''):'<p class="mut">No pending logs.</p>'}</div>`;
   }else if(S.tab==='households'){
-    const list=Object.keys(S.hh).sort();
-    h+=`<div class="card"><h2>Households (${list.length})</h2>${list.length?list.map(id=>{const x=S.hh[id],p=pts(id),t=target(x),[st,c]=standing(x,p);
-      return `<div class="log" onclick="A.hhModal('${id}')" style="cursor:pointer"><div class="row sp"><b>${id} · ${esc(x.name)}</b><span class="chip ${c}">${st}</span></div><div class="mut">${esc(x.barangay||'')} · ${p}/${t} pts${x.targetType==='adjusted'?' · adjusted':''}</div><div class="bar"><i style="width:${Math.min(100,p/t*100)}%"></i></div></div>`}).join(''):'<p class="mut">No households yet.'+(adm?' Import the Excel file in Settings.':'')+'</p>'}</div>`;
+    const {ids:list,P}=hhSorted(),total=Object.keys(S.hh).length,hs=S.hsort||'id',hp=S.hpod||'all';
+    if(adm)h+=podsPanel();
+    const popt=[['all','All households'],['none','No pod yet'],...podNums().map(n=>[n,'Pod '+n]),...legacyPods().map(n=>[n,n])];
+    h+=`<div class="card"><h2>Households (${list.length}${list.length!==total?' of '+total:''})</h2>
+    <div class="row" style="flex-wrap:nowrap;align-items:flex-end;margin-bottom:6px"><div class="grow" style="min-width:0"><label for="hs" style="margin-top:0">Sort by</label><select id="hs" onchange="this.blur();S_.hsort=this.value;A.r()">${Object.entries(SORTS).map(([k,l])=>`<option value="${k}"${hs===k?' selected':''}>${l}</option>`).join('')}</select></div><div class="grow" style="min-width:0"><label for="hp" style="margin-top:0">Show</label><select id="hp" onchange="this.blur();S_.hpod=this.value;A.r()">${popt.map(([k,l])=>`<option value="${esc(k)}"${hp===k?' selected':''}>${esc(l)}</option>`).join('')}</select></div></div>
+    ${list.length?list.map(id=>{const x=S.hh[id],p=P[id],t=target(x),[st,c]=standing(x,p);
+      return `<div class="log" onclick="A.hhModal('${id}')" style="cursor:pointer"><div class="row sp"><b>${id} \u00b7 ${esc(x.name)}</b><span class="chip ${c}">${st}</span></div><div class="mut">${esc(x.barangay||'')} \u00b7 ${p}/${t} pts${x.targetType==='adjusted'?' \u00b7 adjusted':''}</div><div class="row" style="gap:8px;margin:4px 0 6px;align-items:flex-start">${podChip(x.pod)}<span class="mut" style="flex:1;min-width:140px">${availText(x.availability)}</span></div><div class="bar"><i style="width:${Math.min(100,p/t*100)}%"></i></div></div>`}).join(''):(total?'<p class="mut">No households match this filter.</p>':'<p class="mut">No households yet.'+(adm?' Import the Excel file in Settings.':'')+'</p>')}</div>`;
   }else if(S.tab==='users'){
     const ps=S.users.filter(u=>u.role==='parent');
     h+=`<div class="card"><h2>Household accounts</h2>${ps.length?ps.map(u=>userRow(u,true)).join(''):'<p class="mut">No sign-ins yet.</p>'}</div>`;
@@ -207,6 +243,14 @@ function staffView(){
   }
   $('#app').innerHTML=h;
 }
+function podsPanel(){const L=podNums(),leg=legacyPods(),dr=S.podDraft??={},none=Object.keys(S.hh).filter(i=>!S.hh[i].pod).sort(natCmp);
+  const body=`<p class="mut" style="margin-top:12px">Add a pod, type the household IDs in it separated by commas (like <b>H01, H10, H14</b>) and tap Save. IDs you add move into the pod, and IDs you remove are taken out.</p>
+  ${none.length?`<p style="margin:0 0 12px"><b>Not in a pod yet (${none.length}):</b> <span class="mut">${none.join(', ')}</span></p>`:''}
+  ${L.map(n=>{const ms=Object.keys(S.hh).filter(i=>String(S.hh[i].pod||'')===n).sort(natCmp),v=dr[n]??ms.join(', ');
+    return pan('pod'+n,'Pod '+n,ms.length?ms.length+' household'+(ms.length===1?'':'s'):'Empty',`<label for="pt${n}">Households in Pod ${n}</label><input id="pt${n}" value="${esc(v)}" placeholder="H01, H10, H14" autocapitalize="characters" autocomplete="off" oninput="S_.podDraft['${n}']=this.value"><p class="mut" style="margin:6px 0 0">${ms.length?ms.map(i=>esc(hhName(i))).join(', '):'No one yet.'}</p>${glance(ms,S.hh)}<div class="row" style="margin-top:12px"><button class="sm" onclick="A.savePod('${n}')">Save pod</button><button class="sm ghost" onclick="A.delPod('${n}')">Delete pod</button></div>`)}).join('')||'<p class="mut">No pods yet. Tap + Add pod to make the first one.</p>'}
+  <div class="row" style="margin-top:4px"><button class="ghost" onclick="A.addPod()">+ Add pod</button></div>
+  ${leg.length?`<div class="card" style="margin-top:12px"><b>Old pod names found</b><p class="mut">${leg.map(esc).join(', ')} \u2013 these are not numbered. Convert them to numbered pods to manage them here.</p><button class="sm" onclick="A.convertPods()">Convert to numbered pods</button></div>`:''}`;
+  return pan('pods','Pods',L.length?L.length+' pod'+(L.length===1?'':'s')+' \u00b7 tap to manage':'Set up pods',body)}
 function userRow(u,all){
   const hh=S.hh[u.householdId],ok=hh&&hh.masterEmail&&hh.masterEmail.toLowerCase()===(u.email||'').toLowerCase();
   return `<div class="log"><div class="row sp"><b>${esc(u.email)}</b><span class="chip ${u.status==='active'?'approved':'pending'}">${u.status}</span></div>
@@ -221,7 +265,9 @@ function hhModal(id){
   open_(`<div class="row sp"><h2 style="margin:0">${id} · ${esc(x.name)}</h2><button class="text" onclick="A.close()">Close</button></div>
   <p class="mut">${esc(x.barangay||'')}<br>${esc(x.masterEmail||'no email on record')} · ${esc(x.contactNumber||'')}<br><b>${pts(id)}</b> / ${target(x)} points</p>${termRows(id,x)}
   ${adm?`<label>Target type</label><select onchange="A.setTarget('${id}',this.value)"><option value="standard"${x.targetType!=='adjusted'?' selected':''}>Standard (${S.cfg.targetStandard})</option><option value="adjusted"${x.targetType==='adjusted'?' selected':''}>Adjusted (${S.cfg.targetAdjusted})</option></select>`:''}
-  ${adm?`<label>Pod</label><input list="pods" value="${esc(x.pod||'')}" onchange="A.setPod('${id}',this.value)"><datalist id="pods">${[...new Set(Object.values(S.hh).map(v=>v.pod).filter(Boolean))].map(v=>`<option value="${esc(v)}">`).join('')}</datalist>`:`<p class="mut">Pod: ${esc(x.pod||'none')}</p>`}<div class="row" style="margin:12px 0"><button class="sm" onclick="A.manualModal('${id}')">+ Add log</button><button class="sm ghost" onclick="A.buyoutModal('${id}')">Buy-out</button></div>
+  ${adm?`<label for="hp1">Pod</label><select id="hp1" onchange="A.setPod('${id}',this.value)"><option value="">No pod</option>${[...podNums(),...(x.pod&&!isNumPod(x.pod)?[x.pod]:[])].map(n=>`<option value="${esc(n)}"${String(x.pod||'')===n?' selected':''}>${esc(podLabel(n))}</option>`).join('')}</select>`:`<p class="mut">${esc(podLabel(x.pod))}</p>`}
+  <label>Days available at the farm</label>${adm?`<p class="mut" style="margin:0 0 8px">Tap to turn a time on or off. It saves right away.</p>${slotGrid(id,x.availability)}`:`<div class="row" style="gap:6px">${availChips(x.availability)}</div>`}
+  <div class="row" style="margin:12px 0"><button class="sm" onclick="A.manualModal('${id}')">+ Add log</button><button class="sm ghost" onclick="A.buyoutModal('${id}')">Buy-out</button></div>
   ${logs.map(a=>logHtml(a,{actions:`<div class="row" style="margin-top:6px">${a.status!=='approved'?`<button class="sm" onclick="A.approve('${a.id}')">Approve</button>`:''}${a.status!=='voided'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button>`:''}${a.status!=='pending'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','pending')">Reopen</button>`:''}${adm?`<button class="sm ghost" onclick="A.delLog('${a.id}')">Delete</button>`:''}</div>`})).join('')||'<p class="mut">No logs yet.</p>'}`);
 }
 function manualModal(pre=''){
@@ -282,7 +328,7 @@ const A=window.A={
     for(const [id,rs] of Object.entries(g)){
       const name=String(rs[0]['Last Name']).trim();dir[id]=name;
       const d={name,barangay:first(rs,'Barangay'),masterEmail:first(rs,'E-mail Address').toLowerCase(),contactNumber:phone(first(rs,'Contact Number'))};
-      if(!existing[id])d.targetType='standard';
+      if(!existing[id]){d.targetType='standard';d.createdAt=Date.now()}
       b.set(doc(db,'households',id),d,{merge:true});
     }
     rows.forEach(r=>b.set(doc(db,'scholars',String(r['Scholar ID']).trim()),{householdId:String(r['Household ID']).trim(),firstName:String(r['First Name']).trim(),lastName:String(r['Last Name']).trim(),gradeLevel:String(r['Grade Level']).trim()}));
@@ -309,14 +355,44 @@ function programView(){const bl=S.cfg.programBlocks??(S.cfg.slidesUrl?[{type:'sl
 function podView(){const id=S.profile.householdId,pod=S.hh[id]?.pod;
   if(!pod)return $('#app').innerHTML='<div class="card"><h2>My pod</h2><p class="mut">You have not been placed in a pod yet. The Farm Liaison will add you.</p></div>';
   const ids=Object.keys(S.podHh).sort(),pp=i=>i===id?pts(i):S.podAtt.filter(a=>a.hhId===i&&a.status==='approved').reduce((q,a)=>q+(a.points||0),0);
-  $('#app').innerHTML=`<div class="card"><h2>${esc(pod)}</h2><p class="mut">Only people in your pod can see this. Use it to coordinate and help each other.</p>${ids.map(i=>{const x=S.podHh[i],p=pp(i),help=standing(x,p)[1]==='voided';return `<div class="log"><div class="row sp"><b>${esc(x.name)}${i===id?' (you)':''}</b>${help?'<span class="chip warn">Could use a hand</span>':''}</div><div class="mut">${esc(x.barangay||'')} · ${p} points</div>${i!==id?`<div class="row">${x.contactNumber?`<a href="tel:${esc(x.contactNumber)}">${esc(x.contactNumber)}</a>`:''}${x.masterEmail?`<a href="mailto:${esc(x.masterEmail)}">${esc(x.masterEmail)}</a>`:''}</div>`:''}</div>`}).join('')}</div>`}
-const PODS={'Mon AM':'H01 H10 H14 H15 H18 H30','Wed PM':'H02 H04 H28','Thu AM':'H24 H34','Thu PM':'H16 H21','Fri AM':'H17','Sat AM A':'H05 H06 H07 H09','Sat AM B':'H11 H12 H27 H31','Sun AM':'H20 H23 H29 H36','Sun PM':'H22 H33 H35'};
+  $('#app').innerHTML=`<div class="card"><h2>${esc(podLabel(pod))}</h2><p class="mut" style="margin:0">Only people in your pod can see this. Use it to coordinate and help each other.</p></div>${glance(ids,S.podHh,true)}<div class="card"><h2>Podmates</h2>${ids.map(i=>{const x=S.podHh[i],p=pp(i),help=standing(x,p)[1]==='voided';return `<div class="log"><div class="row sp"><b>${esc(x.name)}${i===id?' (you)':''}</b>${help?'<span class="chip warn">Could use a hand</span>':''}</div><div class="mut">${esc(x.barangay||'')} \u00b7 ${p} points</div><div class="row" style="gap:6px;margin-top:6px">${availChips(x.availability)}</div>${i!==id?`<div class="row">${x.contactNumber?`<a href="tel:${esc(x.contactNumber)}">${esc(x.contactNumber)}</a>`:''}${x.masterEmail?`<a href="mailto:${esc(x.masterEmail)}">${esc(x.masterEmail)}</a>`:''}</div>`:''}</div>`}).join('')}</div>`}
+async function runBatch(fns){for(let i=0;i<fns.length;i+=400){const b=writeBatch(db);fns.slice(i,i+400).forEach(f=>f(b));await b.commit()}}
+async function assignPod(map){const ops=[];
+  for(const [id,pod] of Object.entries(map)){
+    ops.push(b=>b.update(doc(db,'households',id),{pod:pod?pod:deleteField()}));
+    S.att.filter(a=>a.hhId===id&&(a.pod||'')!==pod).forEach(a=>ops.push(b=>b.update(doc(db,'attendance',a.id),{pod})))}
+  await runBatch(ops)}
+const regPods=async l=>{const t=new Set([...(S.cfg.pods||[]),...l].map(String));await setDoc(doc(db,'config','program'),{pods:[...t].sort((a,b)=>a-b)},{merge:true})};
+const PODS={'1':'H01 H10 H14 H15 H18 H30','2':'H02 H04 H28','3':'H24 H34','4':'H16 H21','5':'H17','6':'H05 H06 H07 H09','7':'H11 H12 H27 H31','8':'H20 H23 H29 H36','9':'H22 H33 H35'};
 const loc=iso=>{const d=new Date(iso);return `${ymd(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`};
 Object.assign(A,{
  cancelIn:guard(async()=>{await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:null});toast('Cancelled')}),
- setPod:guard(async(id,v)=>{await updateDoc(doc(db,'households',id),{pod:v.trim()});toast('Pod saved')}),
- seedPods:guard(async()=>{if(!confirm('Set pods from the Ugnayan Gulayan window table? This overwrites current pods.'))return;const b=writeBatch(db);let n=0;
-   for(const [pod,l] of Object.entries(PODS))l.split(' ').forEach(id=>{if(S.hh[id]){b.update(doc(db,'households',id),{pod});n++}});await b.commit();toast(n+' households placed')}),
+ setPod:guard(async(id,v)=>{v=String(v||'').trim();await assignPod({[id]:v});toast(v?'Moved to '+podLabel(v):'Removed from pod')}),
+ seedPods:guard(async()=>{if(!confirm('Set pods 1 to 9 from the Ugnayan Gulayan window table? This overwrites current pods.'))return;const map={};let n=0;
+   for(const [pod,l] of Object.entries(PODS))l.split(' ').forEach(id=>{if(S.hh[id]){map[id]=pod;n++}});await assignPod(map);await regPods(Object.keys(PODS));toast(n+' households placed')}),
+ addPod:guard(async()=>{const L=podNums().map(Number),n=String((L.length?Math.max(...L):0)+1);S.open.pods=true;S.open['pod'+n]=true;await regPods([n]);toast('Pod '+n+' added')}),
+ savePod:guard(async n=>{document.activeElement?.blur?.();
+   const raw=($('#pt'+n)?.value??'').split(/[\s,;]+/).map(t=>t.trim()).filter(Boolean);
+   const norm=t=>{const u=t.toUpperCase();if(S.hh[u])return u;const m=/^H?0*(\d+)$/.exec(u);if(m)for(const c of['H'+pad(m[1]),'H'+m[1]])if(S.hh[c])return c;return null};
+   const ids=[],bad=[];raw.forEach(t=>{const id=norm(t);if(!id)bad.push(t);else if(!ids.includes(id))ids.push(id)});
+   if(bad.length)return toast('Not found: '+bad.join(', ')+'. Check the IDs.');
+   const cur=Object.keys(S.hh).filter(i=>String(S.hh[i].pod||'')===n),add=ids.filter(i=>!cur.includes(i)),rem=cur.filter(i=>!ids.includes(i));
+   if(!add.length&&!rem.length){delete S.podDraft[n];A.r();return toast('No changes to save')}
+   const mv=add.filter(i=>S.hh[i].pod);
+   if(mv.length&&!confirm(mv.map(i=>i+' is in '+podLabel(S.hh[i].pod)).join('\n')+'\n\nMove '+(mv.length>1?'them':'it')+' to Pod '+n+'?'))return;
+   const map={};add.forEach(i=>map[i]=n);rem.forEach(i=>map[i]='');
+   await assignPod(map);delete S.podDraft[n];toast('Pod '+n+' saved'+(add.length?' \u00b7 '+add.length+' added':'')+(rem.length?' \u00b7 '+rem.length+' removed':''))}),
+ delPod:guard(async n=>{const ms=Object.keys(S.hh).filter(i=>String(S.hh[i].pod||'')===n);
+   if(!confirm('Delete Pod '+n+'?'+(ms.length?'\n'+ms.length+' household(s) will be left without a pod.':'')))return;
+   const map={};ms.forEach(i=>map[i]='');await assignPod(map);
+   await setDoc(doc(db,'config','program'),{pods:(S.cfg.pods||[]).map(String).filter(p=>p!==n)},{merge:true});delete S.podDraft[n];toast('Pod '+n+' deleted')}),
+ convertPods:guard(async()=>{const leg=legacyPods();if(!leg.length)return;const L=podNums().map(Number);let nx=(L.length?Math.max(...L):0)+1;
+   const ord=[...leg].sort((a,b)=>{const x=OLD_ORDER.indexOf(a),y=OLD_ORDER.indexOf(b);return(x<0?99:x)-(y<0?99:y)||String(a).localeCompare(String(b))}),mp={};ord.forEach(o=>mp[o]=String(nx++));
+   if(!confirm('Convert old pod names?\n\n'+ord.map(o=>o+'  \u2192  Pod '+mp[o]).join('\n')))return;
+   const map={};Object.keys(S.hh).forEach(i=>{const q=S.hh[i].pod;if(q&&mp[q])map[i]=mp[q]});await assignPod(map);await regPods(Object.values(mp));toast('Pods converted')}),
+ toggleSlot:async(id,btn)=>{btn.classList.toggle('on');btn.setAttribute('aria-pressed',btn.classList.contains('on'));
+   const av=[...btn.parentElement.querySelectorAll('.slot.on')].map(b=>b.dataset.k);
+   try{await updateDoc(doc(db,'households',id),{availability:av})}catch(e){console.error(e);btn.classList.toggle('on');btn.setAttribute('aria-pressed',btn.classList.contains('on'));toast('Could not save: '+(e.code||e.message))}},
  saveCfg2:guard(async()=>{let terms=(S.td||S.cfg.terms||[]).map((t,i)=>({name:String(t.name||'').trim()||'Term '+(i+1),end:t.end||'',pct:+t.pct||0}));
    const dated=terms.every(t=>t.end);
    if(terms.some(t=>t.end&&!(t.pct>0&&t.pct<=100)))return toast('A term with an end date needs a % from 1 to 100');
@@ -448,7 +524,7 @@ document.addEventListener('pointerdown',e=>{const g=e.target.closest&&e.target.c
   const mv=ev=>{const y=ev.clientY;if(y<90)scrollBy(0,-14);else if(y>innerHeight-90)scrollBy(0,14);const nx=[...box.children].filter(c=>c!==el).find(c=>{const r=c.getBoundingClientRect();return y<r.top+r.height/2});box.insertBefore(el,nx||null)};
   const up=()=>{g.removeEventListener('pointermove',mv);g.removeEventListener('pointerup',up);g.removeEventListener('pointercancel',up);S.pb=[...box.children].map(c=>S.pb.find(b=>b.id===c.dataset.id));redrawBlk()};
   g.addEventListener('pointermove',mv);g.addEventListener('pointerup',up);g.addEventListener('pointercancel',up)});
-const ADM=['saveClock','saveTerms','saveBlocks','addBlk','delBlk','moveBlk','setBlk','previewBlocks','startYearModal','endYearModal','startYear','endYear','undoLast','exportYear','endPreview','addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','seedPods','setTarget','setPod','delLog','userDel'],STF=['approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
+const ADM=['saveClock','saveTerms','saveBlocks','addBlk','delBlk','moveBlk','setBlk','previewBlocks','startYearModal','endYearModal','startYear','endYear','undoLast','exportYear','endPreview','addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','seedPods','setTarget','setPod','delLog','userDel','savePod','delPod','addPod','convertPods','toggleSlot'],STF=['approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
 ADM.forEach(k=>{const f=A[k];A[k]=(...a)=>S.role==='admin'?f(...a):null});
 STF.forEach(k=>{const f=A[k];A[k]=(...a)=>isStaff()?f(...a):null});
 window.S_=S;
