@@ -46,6 +46,15 @@ nav button.on{color:var(--pri);box-shadow:inset 0 3px 0 var(--pri)}
 .bar{height:8px;background:#e3ebe3;border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--pri)}
 @media(prefers-reduced-motion:no-preference){button{transition:filter .15s}button:active{filter:brightness(.9)}}
 .kpi{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:12px 0}.kpi div{background:var(--bg);border-radius:10px;padding:12px;font-size:13px;color:var(--mut)}.kpi b{display:block;font-size:22px;color:var(--txt)}@media(min-width:760px){.kpi{grid-template-columns:repeat(4,1fr)}}
+.panel{background:var(--card);border-radius:12px;box-shadow:var(--sh);margin-bottom:12px;overflow:hidden}
+.panel summary{list-style:none;min-height:64px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+.panel summary::-webkit-details-marker{display:none}.panel summary small{display:block;color:var(--mut);font-size:13px;margin-top:2px}
+.panel summary i{font-style:normal;color:var(--mut);font-size:20px;transition:transform .15s}.panel[open] summary i{transform:rotate(180deg)}
+.pbody{padding:4px 16px 16px;border-top:1px solid var(--line)}.pbody .card{box-shadow:none;border:1px solid var(--line);padding:12px}
+.blk{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px 12px;margin-bottom:10px}.blk.drag{box-shadow:0 8px 22px rgba(0,0,0,.25);position:relative;z-index:3}
+.grip{touch-action:none;cursor:grab;font-size:28px;width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:var(--mut);user-select:none;flex:none}
+textarea{resize:vertical;min-height:96px}
+.md h2{font-size:20px;margin:14px 0 6px}.md h3{font-size:17px;margin:12px 0 4px}.md h4{font-size:15px;margin:10px 0 4px}.md p,.md li{line-height:1.55;margin:6px 0}.md blockquote{border-left:3px solid var(--line);margin:8px 0;padding-left:12px;color:var(--mut)}.md code{background:var(--bg);padding:1px 5px;border-radius:4px}.md hr{border:0;border-top:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -73,7 +82,7 @@ import {getFirestore,doc,collection,onSnapshot,setDoc,updateDoc,deleteDoc,addDoc
 
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const DEF={targetStandard:120,targetAdjusted:90,pointsPerDay:8,onTrackStandard:75,onTrackAdjusted:60,directory:{},currentYear:'',yearEnd:'',pastYears:[],clockOpen:'04:00',clockClose:'19:00',maxShiftHours:8,slidesUrl:'',yearStart:'',terms:[{name:'Term 1',end:'',pct:25},{name:'Term 2',end:'',pct:50},{name:'Term 3',end:'',pct:75},{name:'Term 4',end:'',pct:100}]};
-const S={user:null,role:null,profile:undefined,hh:{},att:[],users:[],cfg:{...DEF},tab:'approvals',unsubs:[],timer:null,showStaff:false,ptab:'home',podHh:{},podAtt:[],_pod:null};
+const S={user:null,role:null,profile:undefined,hh:{},att:[],users:[],cfg:{...DEF},tab:'approvals',unsubs:[],timer:null,showStaff:false,open:{year:true},ptab:'home',podHh:{},podAtt:[],_pod:null};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isStaff=()=>S.role==='admin'||S.role==='liaison';
@@ -174,10 +183,11 @@ function parentView(){if(S.ptab==='program')return programView();if(S.ptab==='po
 }
 
 function staffView(){
+  const ae=document.activeElement;if(S.tab==='settings'&&ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)&&ae.type!=='file'&&$('#app').contains(ae))return;
   const pendL=S.att.filter(a=>a.status==='pending').sort((a,b)=>a.timeIn>b.timeIn?1:-1);
   const pendU=S.users.filter(u=>u.status==='pending');
   const n=pendL.length+pendU.length,adm=S.role==='admin';
-  const tabs=[['approvals','Approvals',n],['households','Households'],...(adm?[['years','Years'],['users','Users'],['settings','Settings']]:[])];
+  const tabs=[['approvals','Approvals',n],['households','Households'],...(adm?[['users','Users'],['settings','Settings']]:[])];
   if(!tabs.some(t=>t[0]===S.tab))S.tab='approvals';
   $('#nav').innerHTML=tabs.map(([k,l,b])=>`<button class="${S.tab===k?'on':''}" onclick="S_.tab='${k}';A.r()">${l}${b?`<span class="badge">${b}</span>`:''}</button>`).join('');
   let h='';
@@ -189,13 +199,11 @@ function staffView(){
     const list=Object.keys(S.hh).sort();
     h+=`<div class="card"><h2>Households (${list.length})</h2>${list.length?list.map(id=>{const x=S.hh[id],p=pts(id),t=target(x),[st,c]=standing(x,p);
       return `<div class="log" onclick="A.hhModal('${id}')" style="cursor:pointer"><div class="row sp"><b>${id} · ${esc(x.name)}</b><span class="chip ${c}">${st}</span></div><div class="mut">${esc(x.barangay||'')} · ${p}/${t} pts${x.targetType==='adjusted'?' · adjusted':''}</div><div class="bar"><i style="width:${Math.min(100,p/t*100)}%"></i></div></div>`}).join(''):'<p class="mut">No households yet.'+(adm?' Import the Excel file in Settings.':'')+'</p>'}</div>`;
-  }else if(S.tab==='years'){h+=yearsView();}else if(S.tab==='users'){
+  }else if(S.tab==='users'){
     const ps=S.users.filter(u=>u.role==='parent');
     h+=`<div class="card"><h2>Household accounts</h2>${ps.length?ps.map(u=>userRow(u,true)).join(''):'<p class="mut">No sign-ins yet.</p>'}</div>`;
   }else{
-    h+=`<div class="grid two"><div class="card"><h2>Targets</h2><label>Standard target (points)</label><input id="tS" type="number" value="${S.cfg.targetStandard}"><label>Adjusted target (points)</label><input id="tA" type="number" value="${S.cfg.targetAdjusted}"><label>Points per work day</label><input id="tP" type="number" value="${S.cfg.pointsPerDay}"><label>On Track from (standard / adjusted)</label><div class="row"><input id="oS" type="number" value="${S.cfg.onTrackStandard}" style="flex:1"><input id="oA" type="number" value="${S.cfg.onTrackAdjusted}" style="flex:1"></div><div style="margin-top:14px"><button onclick="A.saveCfg()">Save settings</button></div></div>
-    <div class="card"><h2>Clock-in and program</h2><label>Clock-in opens</label><input id="cO" type="time" value="${S.cfg.clockOpen}"><label>Clock-in closes</label><input id="cC" type="time" value="${S.cfg.clockClose}"><label>Auto-close open sessions after (hours)</label><input id="cM" type="number" value="${S.cfg.maxShiftHours}"><p class="mut">Program year: <b>${esc(yLabel(S.cfg.currentYear)||'not started')}</b>. Start and end years under the Years tab.</p><label>Terms: name, end date, % of target due by then</label><div id="termsBox">${termsHtml()}</div><p class="mut" style="margin:4px 0 8px">End dates are optional for now. Terms without an end date are saved but not used yet.</p><div class="row"><button class="ghost sm" onclick="A.addTerm()">+ Add term</button><button class="ghost sm" onclick="A.evenTerms()">Spread evenly</button></div><label>Google Slides link (shown to parents)</label><input id="sU" value="${esc(S.cfg.slidesUrl||'')}" placeholder="https://docs.google.com/presentation/d/..."><div style="margin-top:14px"><button onclick="A.saveCfg2()">Save</button></div></div>
-    <div class="card"><h2>Excel</h2><p class="mut">Import the scholar sheet "Sorted by Barangay". Existing households keep their target type.</p><input id="xf" type="file" accept=".xlsx,.xls"><div class="row" style="margin-top:12px"><button onclick="A.importXlsx()">Import</button><button class="ghost" onclick="A.exportXlsx()">Export report</button><button class="ghost" onclick="A.seedPods()">Load pods</button></div></div></div>`;
+    h+=settingsHtml();
   }
   $('#app').innerHTML=h;
 }
@@ -297,7 +305,7 @@ function termRows(id,h){const T=(S.cfg.terms||[]).filter(x=>x.end),t=target(h),t
   return T.map(x=>{const thr=Math.round(t*x.pct/100),got=S.att.filter(a=>a.hhId===id&&a.status==='approved'&&a.date<=x.end&&inYear(a)).reduce((q,a)=>q+(a.points||0),0),closed=x.end<today,ok=got>=thr;
     return `<div class="row sp mut"><span>${esc(x.name)} (by ${fmtD(x.end)}): ${thr} pts</span><b style="color:${ok?'var(--ok)':closed?'var(--void)':'var(--pend)'}">${ok?'Met':closed?'Not met':'In progress'}</b></div>`}).join('')}
 const slideEmbed=u=>{const m=String(u||'').match(/presentation\/d\/(e\/)?([\w-]+)/);return m?`https://docs.google.com/presentation/d/${m[1]||''}${m[2]}/embed?start=false&loop=false`:''};
-function programView(){const u=slideEmbed(S.cfg.slidesUrl);$('#app').innerHTML=`<div class="card"><h2>About the program</h2>${u?`<div style="position:relative;padding-top:56.25%;border-radius:8px;overflow:hidden"><iframe src="${esc(u)}" style="position:absolute;inset:0;width:100%;height:100%;border:0" allowfullscreen title="Program presentation"></iframe></div><p><a href="${esc(S.cfg.slidesUrl)}" target="_blank" rel="noopener">Open in Google Slides</a></p>`:'<p class="mut">The presentation has not been added yet.</p>'}</div>`}
+function programView(){const bl=S.cfg.programBlocks??(S.cfg.slidesUrl?[{type:'slides',title:'About the program',url:S.cfg.slidesUrl,md:''}]:[]);$('#app').innerHTML=programHtml(bl)}
 function podView(){const id=S.profile.householdId,pod=S.hh[id]?.pod;
   if(!pod)return $('#app').innerHTML='<div class="card"><h2>My pod</h2><p class="mut">You have not been placed in a pod yet. The Farm Liaison will add you.</p></div>';
   const ids=Object.keys(S.podHh).sort(),pp=i=>i===id?pts(i):S.podAtt.filter(a=>a.hhId===i&&a.status==='approved').reduce((q,a)=>q+(a.points||0),0);
@@ -388,7 +396,59 @@ Object.assign(A,{
   const s3=XLSX.utils.json_to_sheet(L.map(a=>({Type:a.kind||'work',Date:a.date,'Household ID':a.hhId,Pod:a.pod||'','Time In':fmtT(a.timeIn),'Time Out':fmtT(a.timeOut),Hours:a.durationHours||0,Note:a.note||'',Points:a.points||0,Status:a.status,'Approved by':a.approvedBy||''})));s3['!cols']=Array(11).fill({wch:14});XLSX.utils.book_append_sheet(wb,s3,'Attendance Logs');
   XLSX.writeFile(wb,`ugnayan-gulayan-${id||'all'}.xlsx`)})
 });
-const ADM=['startYearModal','endYearModal','startYear','endYear','undoLast','exportYear','endPreview','addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','seedPods','setTarget','setPod','delLog','userDel'],STF=['approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
+const uid=()=>Math.random().toString(36).slice(2,8);
+function md(src){const E=t=>t.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const inl=t=>E(t).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<i>$2</i>').replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  const out=[];let list=null,para=[];const flush=()=>{if(para.length){out.push('<p>'+inl(para.join(' '))+'</p>');para=[]}},endL=()=>{if(list){out.push('</'+list+'>');list=null}};
+  for(const raw of String(src||'').split('\n')){const l=raw.trimEnd();let m;
+    if(!l.trim()){flush();endL();continue}
+    if(m=/^(#{1,3})\s+(.*)$/.exec(l)){flush();endL();out.push('<h'+(m[1].length+1)+'>'+inl(m[2])+'</h'+(m[1].length+1)+'>')}
+    else if(/^(-{3,}|\*{3,})$/.test(l.trim())){flush();endL();out.push('<hr>')}
+    else if(m=/^\s*[-*]\s+(.*)$/.exec(l)){flush();if(list!=='ul'){endL();out.push('<ul>');list='ul'}out.push('<li>'+inl(m[1])+'</li>')}
+    else if(m=/^\s*\d+[.)]\s+(.*)$/.exec(l)){flush();if(list!=='ol'){endL();out.push('<ol>');list='ol'}out.push('<li>'+inl(m[1])+'</li>')}
+    else if(m=/^>\s?(.*)$/.exec(l)){flush();endL();out.push('<blockquote>'+inl(m[1])+'</blockquote>')}
+    else{endL();para.push(l.trim())}}
+  flush();endL();return out.join('')}
+function programHtml(bl){return bl.length?bl.map(b=>{const u=b.type==='slides'?slideEmbed(b.url):'';
+  return `<div class="card">${b.title?`<h2>${esc(b.title)}</h2>`:''}${u?`<div style="position:relative;padding-top:56.25%;border-radius:8px;overflow:hidden"><iframe src="${esc(u)}" style="position:absolute;inset:0;width:100%;height:100%;border:0" allowfullscreen title="${esc(b.title||'Slides')}"></iframe></div><p><a href="${esc(b.url)}" target="_blank" rel="noopener">Open in Google Slides</a></p>`:''}${b.md?`<div class="md">${md(b.md)}</div>`:''}</div>`}).join(''):'<div class="card"><p class="mut">Nothing has been added yet.</p></div>'}
+function initBlocks(){return JSON.parse(JSON.stringify(S.cfg.programBlocks??(S.cfg.slidesUrl?[{id:uid(),type:'slides',title:'About the program',url:S.cfg.slidesUrl,md:''}]:[]))).map(b=>({id:b.id||uid(),type:b.type,title:b.title||'',url:b.url||'',md:b.md||''}))}
+function blocksHtml(){S.pb??=initBlocks();const bt='style="padding:0 14px"';
+  return S.pb.map((b,i)=>`<div class="blk" data-i="${i}" data-id="${b.id}"><div class="row" style="flex-wrap:nowrap;gap:4px"><span class="grip" data-grip role="button" aria-label="Drag to reorder">\u2807</span><span class="chip ${b.type==='slides'?'approved':'pending'}">${b.type==='slides'?'Slides':'Text'}</span><span class="grow"></span><button class="ghost sm" ${bt} aria-label="Move up" onclick="A.moveBlk(${i},-1)">\u25b2</button><button class="ghost sm" ${bt} aria-label="Move down" onclick="A.moveBlk(${i},1)">\u25bc</button><button class="ghost sm" ${bt} aria-label="Delete block" onclick="A.delBlk(${i})">\u2715</button></div>
+  <label>Title (optional)</label><input value="${esc(b.title)}" oninput="A.setBlk(${i},'title',this.value)">
+  ${b.type==='slides'?`<label>Google Slides link</label><input value="${esc(b.url)}" inputmode="url" placeholder="https://docs.google.com/presentation/d/..." oninput="A.setBlk(${i},'url',this.value)">`:''}
+  <label>${b.type==='slides'?'Description (Markdown, optional)':'Text (Markdown)'}</label><textarea rows="${b.type==='slides'?3:6}" oninput="A.setBlk(${i},'md',this.value)">${esc(b.md)}</textarea></div>`).join('')||'<p class="mut">No blocks yet. Add slides or text below.</p>'}
+const redrawBlk=()=>{const b=$('#blkBox');if(b)b.innerHTML=blocksHtml()};
+const pan=(k,t,sub,body)=>`<details class="panel" ${S.open[k]?'open':''} ontoggle="S_.open['${k}']=this.open"><summary><span><b>${t}</b><small>${sub}</small></span><i>\u25be</i></summary><div class="pbody">${body}</div></details>`;
+function settingsHtml(){const c=S.cfg,nb=(S.pb||initBlocks()).length;
+  return pan('year','Program year',c.currentYear?yLabel(c.currentYear)+(c.yearEnd?' \u00b7 ended':' \u00b7 open'):'Not started',yearsView())
+  +pan('targets','Points and targets','Standard '+c.targetStandard+' \u00b7 Adjusted '+c.targetAdjusted,`<label>Standard target (points)</label><input id="tS" type="number" inputmode="numeric" value="${c.targetStandard}"><label>Adjusted target (points)</label><input id="tA" type="number" inputmode="numeric" value="${c.targetAdjusted}"><label>Points per work day</label><input id="tP" type="number" inputmode="numeric" value="${c.pointsPerDay}"><label>On Track from (standard / adjusted)</label><div class="row" style="flex-wrap:nowrap"><input id="oS" type="number" inputmode="numeric" value="${c.onTrackStandard}"><input id="oA" type="number" inputmode="numeric" value="${c.onTrackAdjusted}"></div><div style="margin-top:14px"><button onclick="A.saveCfg()">Save</button></div>`)
+  +pan('clock','Clock-in',c.clockOpen+' to '+c.clockClose,`<label>Clock-in opens</label><input id="cO" type="time" value="${c.clockOpen}"><label>Clock-in closes</label><input id="cC" type="time" value="${c.clockClose}"><label>Auto-close open sessions after (hours)</label><input id="cM" type="number" inputmode="numeric" value="${c.maxShiftHours}"><div style="margin-top:14px"><button onclick="A.saveClock()">Save</button></div>`)
+  +pan('terms','Terms',(c.terms||[]).length+' terms',`<p class="mut">Name, end date, and % of the target due by then. End dates are optional for now.</p><div id="termsBox">${termsHtml()}</div><div class="row"><button class="ghost sm" onclick="A.addTerm()">+ Add term</button><button class="ghost sm" onclick="A.evenTerms()">Spread evenly</button></div><div style="margin-top:14px"><button onclick="A.saveTerms()">Save</button></div>`)
+  +pan('page','Program page',nb+' block'+(nb===1?'':'s'),`<p class="mut">Households see these blocks in this order. Drag the handle \u2807 or use \u25b2 \u25bc to reorder. Text supports Markdown: <code># Heading</code>, <code>**bold**</code>, <code>- list</code>, <code>[link](https://...)</code>.</p><div id="blkBox">${blocksHtml()}</div><div class="row"><button class="ghost" onclick="A.addBlk('slides')">+ Slides</button><button class="ghost" onclick="A.addBlk('text')">+ Text</button></div><div class="row" style="margin-top:14px"><button onclick="A.saveBlocks()">Save</button><button class="ghost" onclick="A.previewBlocks()">Preview</button></div>`)
+  +pan('data','Excel and pods','Import, export, load pods',`<p class="mut">Import the scholar sheet "Sorted by Barangay". Existing households keep their target type.</p><input id="xf" type="file" accept=".xlsx,.xls"><div class="row" style="margin-top:12px"><button onclick="A.importXlsx()">Import</button><button class="ghost" onclick="A.exportXlsx()">Export year</button><button class="ghost" onclick="A.seedPods()">Load pods</button></div>`)}
+Object.assign(A,{
+ setBlk:(i,k,v)=>{if(S.pb&&S.pb[i])S.pb[i][k]=v},
+ addBlk:t=>{S.pb??=initBlocks();S.pb.push({id:uid(),type:t,title:'',url:'',md:''});redrawBlk();const l=$('#blkBox').lastElementChild;if(l)l.scrollIntoView({behavior:'smooth',block:'center'})},
+ delBlk:i=>{const b=S.pb[i];if((b.title||b.url||b.md)&&!confirm('Delete this block?'))return;S.pb.splice(i,1);redrawBlk()},
+ moveBlk:(i,d)=>{const j=i+d;if(j<0||j>=S.pb.length)return;[S.pb[i],S.pb[j]]=[S.pb[j],S.pb[i]];redrawBlk()},
+ previewBlocks:()=>open_(`<div class="row sp"><h2 style="margin:0">Preview</h2><button class="text" onclick="A.close()">Close</button></div><p class="mut">This is how households will see it.</p>${programHtml((S.pb||initBlocks()).filter(b=>b.title||b.md||slideEmbed(b.url)))}`),
+ saveBlocks:guard(async()=>{const bl=(S.pb||initBlocks()).map(b=>({id:b.id,type:b.type,title:b.title.trim(),url:b.type==='slides'?b.url.trim():'',md:b.md.trim()}));
+   const bad=bl.findIndex(b=>b.type==='slides'?!slideEmbed(b.url):!(b.title||b.md));
+   if(bad>=0)return toast(bl[bad].type==='slides'?'Block '+(bad+1)+': add a valid Google Slides link':'Block '+(bad+1)+' is empty');
+   await setDoc(doc(db,'config','program'),{programBlocks:bl},{merge:true});S.pb=null;A.r();toast('Program page saved')}),
+ saveClock:guard(async()=>{await setDoc(doc(db,'config','program'),{clockOpen:$('#cO').value,clockClose:$('#cC').value,maxShiftHours:+$('#cM').value},{merge:true});toast('Clock-in saved')}),
+ saveTerms:guard(async()=>{let terms=(S.td||S.cfg.terms||[]).map((t,i)=>({name:String(t.name||'').trim()||'Term '+(i+1),end:t.end||'',pct:+t.pct||0}));const dated=terms.every(t=>t.end);
+   if(terms.some(t=>t.end&&!(t.pct>0&&t.pct<=100)))return toast('A term with an end date needs a % from 1 to 100');
+   if(dated)terms=terms.sort((a,b)=>a.end>b.end?1:-1);
+   if(dated&&terms.length&&terms[terms.length-1].pct!==100&&!confirm('The last term is not 100% of the target. Save anyway?'))return;
+   await setDoc(doc(db,'config','program'),{terms},{merge:true});S.td=null;A.r();toast('Terms saved')})
+});
+document.addEventListener('pointerdown',e=>{const g=e.target.closest&&e.target.closest('[data-grip]');if(!g||S.role!=='admin')return;e.preventDefault();
+  const box=$('#blkBox'),el=g.closest('.blk');if(!box||!el)return;el.classList.add('drag');g.setPointerCapture(e.pointerId);
+  const mv=ev=>{const y=ev.clientY;if(y<90)scrollBy(0,-14);else if(y>innerHeight-90)scrollBy(0,14);const nx=[...box.children].filter(c=>c!==el).find(c=>{const r=c.getBoundingClientRect();return y<r.top+r.height/2});box.insertBefore(el,nx||null)};
+  const up=()=>{g.removeEventListener('pointermove',mv);g.removeEventListener('pointerup',up);g.removeEventListener('pointercancel',up);S.pb=[...box.children].map(c=>S.pb.find(b=>b.id===c.dataset.id));redrawBlk()};
+  g.addEventListener('pointermove',mv);g.addEventListener('pointerup',up);g.addEventListener('pointercancel',up)});
+const ADM=['saveClock','saveTerms','saveBlocks','addBlk','delBlk','moveBlk','setBlk','previewBlocks','startYearModal','endYearModal','startYear','endYear','undoLast','exportYear','endPreview','addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','seedPods','setTarget','setPod','delLog','userDel'],STF=['approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
 ADM.forEach(k=>{const f=A[k];A[k]=(...a)=>S.role==='admin'?f(...a):null});
 STF.forEach(k=>{const f=A[k];A[k]=(...a)=>isStaff()?f(...a):null});
 window.S_=S;
