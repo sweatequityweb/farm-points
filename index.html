@@ -60,6 +60,8 @@ textarea{resize:vertical;min-height:96px}
 .slot{background:#fff;color:var(--mut);border:1px solid #b9c6b9;border-radius:12px;padding:0 8px}
 .slot.on{background:var(--pri);color:#fff;border-color:var(--pri)}
 .panel .panel{box-shadow:none;border:1px solid var(--line)}
+.chip.role{background:#e3f2fd;color:#0d47a1}
+.lock{background:var(--bg);border-radius:10px;padding:10px 12px}
 .md h2{font-size:20px;margin:14px 0 6px}.md h3{font-size:17px;margin:12px 0 4px}.md h4{font-size:15px;margin:10px 0 4px}.md p,.md li{line-height:1.55;margin:6px 0}.md blockquote{border-left:3px solid var(--line);margin:8px 0;padding-left:12px;color:var(--mut)}.md code{background:var(--bg);padding:1px 5px;border-radius:4px}.md hr{border:0;border-top:1px solid var(--line)}
 </style>
 </head>
@@ -88,7 +90,7 @@ import {getFirestore,doc,collection,onSnapshot,setDoc,updateDoc,deleteDoc,addDoc
 
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const DEF={targetStandard:120,targetAdjusted:90,pointsPerDay:8,onTrackStandard:75,onTrackAdjusted:60,directory:{},currentYear:'',yearEnd:'',pastYears:[],clockOpen:'04:00',clockClose:'19:00',maxShiftHours:8,slidesUrl:'',yearStart:'',terms:[{name:'Term 1',end:'',pct:25},{name:'Term 2',end:'',pct:50},{name:'Term 3',end:'',pct:75},{name:'Term 4',end:'',pct:100}]};
-const S={user:null,role:null,profile:undefined,hh:{},att:[],users:[],cfg:{...DEF},tab:'approvals',unsubs:[],timer:null,showStaff:false,open:{year:true},ptab:'home',podHh:{},podAtt:[],_pod:null,podDraft:{},hsort:'id',hpod:'all'};
+const S={user:null,role:null,profile:undefined,hh:{},att:[],users:[],cfg:{...DEF},tab:'approvals',unsubs:[],timer:null,showStaff:false,open:{year:true},ptab:'home',podHh:{},podAtt:[],_pod:null,podDraft:{},winDraft:{},hsort:'id',hpod:'all',contacts:{},pp:{},holders:{},myContact:null,myPp:null,podContacts:{},podPts:{},reqFrom:[],reqTo:[]};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isStaff=()=>S.role==='admin'||S.role==='liaison';
@@ -121,7 +123,6 @@ const podLabel=p=>p?(isNumPod(p)?'Pod '+p:String(p)):'No pod';
 const podChip=p=>p?`<span class="chip pod">${esc(podLabel(p))}</span>`:'<span class="chip nopod">No pod</span>';
 const podNums=()=>{const t=new Set((S.cfg.pods||[]).map(String));Object.values(S.hh).forEach(h=>{if(isNumPod(h.pod))t.add(String(h.pod))});return[...t].sort((a,b)=>a-b)};
 const legacyPods=()=>[...new Set(Object.values(S.hh).map(h=>h.pod).filter(p=>p&&!isNumPod(p)))];
-const OLD_ORDER=['Mon AM','Wed PM','Thu AM','Thu PM','Fri AM','Sat AM A','Sat AM B','Sun AM','Sun PM'];
 const DAYS=[['Mon','Monday'],['Tue','Tuesday'],['Wed','Wednesday'],['Thu','Thursday'],['Fri','Friday'],['Sat','Saturday'],['Sun','Sunday']];
 const slotName=k=>{const[d,t]=k.split('-'),f=DAYS.find(x=>x[0]===d);return f?f[1]+' '+(t==='AM'?'morning':'afternoon'):k};
 const slotOrd=k=>{const[d,t]=k.split('-');return DAYS.findIndex(x=>x[0]===d)*2+(t==='PM'?1:0)};
@@ -133,6 +134,23 @@ function glance(ids,map,card){const n=ids.length,cnt={};ids.forEach(i=>(map[i]?.
   const rows=Object.entries(cnt).sort((a,b)=>b[1]-a[1]||slotOrd(a[0])-slotOrd(b[0]));if(!rows.length)return'';
   const body=rows.map(([k,c])=>`<div style="margin:8px 0"><div class="row sp"><span>${slotName(k)}</span><span class="mut">${c} of ${n}</span></div><div class="bar"><i style="width:${c/n*100}%"></i></div></div>`).join('');
   return card?`<div class="card"><h2>When your pod is free</h2><p class="mut" style="margin-top:0">Times most podmates can come are listed first.</p>${body}</div>`:`<div style="margin-top:12px"><div class="mut"><b>Pod overlap</b></div>${body}</div>`}
+const fmt12=t=>{const[h,m]=String(t||'').split(':');if(!h)return'';const n=+h;return((n+11)%12+1)+':'+m+' '+(n<12?'AM':'PM')};
+const dayFull=d=>(DAYS.find(x=>x[0]===d)||[])[1]||d;
+const winLabel=w=>w?dayFull(w.day)+' '+fmt12(w.start)+' \u2013 '+fmt12(w.end):'';
+const winById=id=>id?(S.cfg.windows||[]).find(w=>w.id===id):null;
+const winChip=x=>{const w=winById(x.window);return w?`<span class="sch">${esc(winLabel(w))}</span>`:''};
+const wSort=(a,b)=>DAYS.findIndex(x=>x[0]===a.day)-DAYS.findIndex(x=>x[0]===b.day)||String(a.start).localeCompare(String(b.start));
+const roleName=id=>((S.cfg.roles||[]).find(r=>r.id===id)||{}).name;
+const roleChips=hh=>Object.values(S.holders).filter(v=>v.hhId===hh&&roleName(v.roleId)).map(v=>`<span class="chip role">${esc(roleName(v.roleId))}</span>`).join('');
+const ctc=id=>S.contacts[id]||S.hh[id]||{};
+const incoming=()=>{const pod=String(S.hh[S.profile?.householdId]?.pod||'');return S.reqTo.filter(r=>r.status==='pending'&&String(r.pod)===pod&&(r.type==='contact'||(roleName(r.roleId)&&S.holders[r.assignId]?.hhId===r.fromHh)))};
+function parseIds(text){const raw=String(text||'').split(/[\s,;]+/).map(t=>t.trim()).filter(Boolean),ids=[],bad=[];
+  const norm=t=>{const u=t.toUpperCase();if(S.hh[u])return u;const m=/^H?0*(\d+)$/.exec(u);if(m)for(const c of['H'+pad(m[1]),'H'+m[1]])if(S.hh[c])return c;return null};
+  raw.forEach(t=>{const id=norm(t);if(!id)bad.push(t);else if(!ids.includes(id))ids.push(id)});return{ids,bad}}
+let syncT;const schedSync=()=>{clearTimeout(syncT);syncT=setTimeout(syncPoints,1500)};
+async function syncPoints(){if(!S.user||!S._attOk||!S._cfgOk)return;
+  try{if(isStaff()){for(const id of Object.keys(S.pp)){const p=pts(id);if(S.pp[id].points!==p)await updateDoc(doc(db,'podpoints',id),{points:p})}}
+  else if(S.profile?.status==='active'&&S.myPp){const id=S.profile.householdId,p=pts(id);if(S.myPp.points!==p)await updateDoc(doc(db,'podpoints',id),{points:p})}}catch(e){console.error(e)}}
 const SORTS={id:'Household ID',ptsDesc:'Most points',ptsAsc:'Fewest points',newest:'Newest added',name:'Name A\u2013Z',pod:'Pod'};
 function hhSorted(){let ids=Object.keys(S.hh);const P={};ids.forEach(i=>P[i]=pts(i));const f=S.hpod||'all',k=S.hsort||'id';
   if(f==='none')ids=ids.filter(i=>!S.hh[i].pod);else if(f!=='all')ids=ids.filter(i=>String(S.hh[i].pod||'')===f);
@@ -144,15 +162,18 @@ function hhSorted(){let ids=Object.keys(S.hh);const P={};ids.forEach(i=>P[i]=pts
 function clearSubs(){S.unsubs.forEach(u=>u());S.unsubs=[];clearInterval(S.timer)}
 const sub=(ref,cb)=>S.unsubs.push(onSnapshot(ref,cb,e=>{console.error(e);toast('Permission or network error: '+e.code)}));
 onAuthStateChanged(auth,user=>{
-  clearSubs();S.user=user;S.profile=undefined;S.hh={};S.att=[];S.users=[];S.podHh={};S.podAtt=[];S._pod=null;S._hhSub=false;S.years=[];S.events=[];
+  clearSubs();S.user=user;S.profile=undefined;S.hh={};S.att=[];S.users=[];S.podHh={};S.podAtt=[];S._pod=null;S._hhSub=false;S.contacts={};S.pp={};S.holders={};S.myContact=null;S.myPp=null;S.podContacts={};S.podPts={};S.reqFrom=[];S.reqTo=[];S._attOk=false;S._cfgOk=false;S.years=[];S.events=[];
   if(!user){S.role=null;return render()}
   const em=(user.email||'').toLowerCase();
   S.role=em===ADMIN_EMAIL?'admin':em===LIAISON_EMAIL?'liaison':'parent';
-  sub(doc(db,'config','program'),s=>{S.cfg={...DEF,...(s.data()||{})};const tt=S.cfg.terms||[];if(tt.length===3&&tt.every(t=>!t.end)&&tt.map(t=>t.pct).join()==='33,66,100')S.cfg.terms=DEF.terms;render()});
+  sub(doc(db,'config','program'),s=>{S.cfg={...DEF,...(s.data()||{})};S._cfgOk=true;const tt=S.cfg.terms||[];if(tt.length===3&&tt.every(t=>!t.end)&&tt.map(t=>t.pct).join()==='33,66,100')S.cfg.terms=DEF.terms;render()});
   if(isStaff()){
     S.profile={status:'active'};
     sub(collection(db,'households'),s=>{S.hh={};s.forEach(d=>S.hh[d.id]=d.data());render()});
-    sub(collection(db,'attendance'),s=>{S.att=s.docs.map(d=>({id:d.id,...d.data()}));render()});
+    sub(collection(db,'attendance'),s=>{S.att=s.docs.map(d=>({id:d.id,...d.data()}));S._attOk=true;render()});
+    sub(collection(db,'contacts'),s=>{S.contacts={};s.forEach(d=>S.contacts[d.id]=d.data());render()});
+    sub(collection(db,'podpoints'),s=>{S.pp={};s.forEach(d=>S.pp[d.id]=d.data());render()});
+    sub(collection(db,'roleHolders'),s=>{S.holders={};s.forEach(d=>S.holders[d.id]=d.data());render()});
     sub(collection(db,'users'),s=>{S.users=s.docs.map(d=>({id:d.id,...d.data()}));S.users.forEach(u=>sweep(u.id,u));render()});
     if(S.role==='admin'){sub(collection(db,'years'),s=>{S.years=s.docs.map(d=>d.data());render()});sub(collection(db,'yearEvents'),s=>{S.events=s.docs.map(d=>({id:d.id,...d.data()}));render()})}
   }else{
@@ -161,11 +182,17 @@ onAuthStateChanged(auth,user=>{
       if(S.profile?.status==='active'&&S.profile.householdId&&!S._hhSub){
         S._hhSub=true;const id=S.profile.householdId;
         sub(doc(db,'households',id),x=>{S.hh={[id]:x.data()};const pd=x.data()?.pod;
-          if(pd&&S._pod!==pd){S._pod=pd;
+          if(pd&&S._pod!==pd){S._pod=pd;S.podHh={};S.podContacts={};S.podPts={};S.holders={};
             sub(query(collection(db,'households'),where('pod','==',pd)),y=>{S.podHh={};y.forEach(d=>S.podHh[d.id]=d.data());render()});
-            sub(query(collection(db,'attendance'),where('pod','==',pd)),y=>{S.podAtt=y.docs.map(d=>d.data());render()})}
+            sub(query(collection(db,'contacts'),where('pod','==',pd),where('shared','==',true)),y=>{S.podContacts={};y.forEach(d=>S.podContacts[d.id]=d.data());render()});
+            sub(query(collection(db,'podpoints'),where('pod','==',pd),where('shown','==',true)),y=>{S.podPts={};y.forEach(d=>S.podPts[d.id]=d.data());render()});
+            sub(query(collection(db,'roleHolders'),where('pod','==',pd)),y=>{S.holders={};y.forEach(d=>S.holders[d.id]=d.data());render()})}
           render()});
-        sub(query(collection(db,'attendance'),where('hhId','==',id)),x=>{S.att=x.docs.map(d=>({id:d.id,...d.data()}));render()});
+        sub(doc(db,'contacts',id),x=>{S.myContact=x.exists()?x.data():null;render()});
+        sub(doc(db,'podpoints',id),x=>{S.myPp=x.exists()?x.data():null;render()});
+        sub(query(collection(db,'requests'),where('fromHh','==',id)),x=>{S.reqFrom=x.docs.map(d=>({id:d.id,...d.data()}));render()});
+        sub(query(collection(db,'requests'),where('toHh','==',id)),x=>{S.reqTo=x.docs.map(d=>({id:d.id,...d.data()}));render()});
+        sub(query(collection(db,'attendance'),where('hhId','==',id)),x=>{S.att=x.docs.map(d=>({id:d.id,...d.data()}));S._attOk=true;render()});
       }
       render();
     });
@@ -174,6 +201,7 @@ onAuthStateChanged(auth,user=>{
 
 /* ---------- rendering ---------- */
 function render(){
+  schedSync();
   const app=$('#app'),nav=$('#nav'),hdr=$('#hdr');
   clearInterval(S.timer);
   if(!S.user){hdr.hidden=nav.hidden=true;return app.innerHTML=loginView()}
@@ -184,7 +212,7 @@ function render(){
   nav.hidden=true;nav.innerHTML='';
   if(!S.profile)return app.innerHTML=claimView();
   if(S.profile.status!=='active')return app.innerHTML=`<div class="center"><div style="font-size:56px">🌱</div><h2>Waiting for approval</h2><p class="mut" style="max-width:320px">Your request to join household <b>${esc(hhName(S.profile.householdId))}</b> was sent. The Farm Liaison will confirm it. This screen updates by itself.</p><button class="ghost" onclick="A.cancelClaim()">Choose a different household</button></div>`;
-  nav.hidden=false;nav.innerHTML=[['home','Home'],['pod','My pod'],['program','Program']].map(([k,l])=>`<button class="${S.ptab===k?'on':''}" onclick="S_.ptab='${k}';A.r()">${l}</button>`).join('');
+  nav.hidden=false;const nIn=incoming().length;nav.innerHTML=[['home','Home'],['pod','My pod'],['program','Program']].map(([k,l])=>`<button class="${S.ptab===k?'on':''}" onclick="S_.ptab='${k}';A.r()">${l}${k==='pod'&&nIn?`<span class="badge">${nIn}</span>`:''}</button>`).join('');
   parentView();
 }
 function loginView(){return `<div class="center"><div style="font-size:64px">🥬</div><h1 style="margin:0;color:var(--pri-d)">Ugnayan Gulayan</h1><p class="mut">Farm attendance and points for Noah Scholarship households</p>
@@ -229,12 +257,12 @@ function staffView(){
     h+=`<div class="card"><h2>Pending logs</h2>${pendL.length?pendL.map(a=>logHtml(a,{hh:1,actions:`<div class="row" style="margin-top:8px"><button class="sm" onclick="A.approve('${a.id}')">Approve</button><button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button></div>`})).join(''):'<p class="mut">No pending logs.</p>'}</div>`;
   }else if(S.tab==='households'){
     const {ids:list,P}=hhSorted(),total=Object.keys(S.hh).length,hs=S.hsort||'id',hp=S.hpod||'all';
-    if(adm)h+=podsPanel();
+    if(adm)h+=privacyNotice()+podsPanel()+rolesPanel();
     const popt=[['all','All households'],['none','No pod yet'],...podNums().map(n=>[n,'Pod '+n]),...legacyPods().map(n=>[n,n])];
     h+=`<div class="card"><h2>Households (${list.length}${list.length!==total?' of '+total:''})</h2>
     <div class="row" style="flex-wrap:nowrap;align-items:flex-end;margin-bottom:6px"><div class="grow" style="min-width:0"><label for="hs" style="margin-top:0">Sort by</label><select id="hs" onchange="this.blur();S_.hsort=this.value;A.r()">${Object.entries(SORTS).map(([k,l])=>`<option value="${k}"${hs===k?' selected':''}>${l}</option>`).join('')}</select></div><div class="grow" style="min-width:0"><label for="hp" style="margin-top:0">Show</label><select id="hp" onchange="this.blur();S_.hpod=this.value;A.r()">${popt.map(([k,l])=>`<option value="${esc(k)}"${hp===k?' selected':''}>${esc(l)}</option>`).join('')}</select></div></div>
     ${list.length?list.map(id=>{const x=S.hh[id],p=P[id],t=target(x),[st,c]=standing(x,p);
-      return `<div class="log" onclick="A.hhModal('${id}')" style="cursor:pointer"><div class="row sp"><b>${id} \u00b7 ${esc(x.name)}</b><span class="chip ${c}">${st}</span></div><div class="mut">${esc(x.barangay||'')} \u00b7 ${p}/${t} pts${x.targetType==='adjusted'?' \u00b7 adjusted':''}</div><div class="row" style="gap:8px;margin:4px 0 6px;align-items:flex-start">${podChip(x.pod)}<span class="mut" style="flex:1;min-width:140px">${availText(x.availability)}</span></div><div class="bar"><i style="width:${Math.min(100,p/t*100)}%"></i></div></div>`}).join(''):(total?'<p class="mut">No households match this filter.</p>':'<p class="mut">No households yet.'+(adm?' Import the Excel file in Settings.':'')+'</p>')}</div>`;
+      return `<div class="log" onclick="A.hhModal('${id}')" style="cursor:pointer"><div class="row sp"><b>${id} \u00b7 ${esc(x.name)}</b><span class="chip ${c}">${st}</span></div><div class="mut">${esc(x.barangay||'')} \u00b7 ${p}/${t} pts${x.targetType==='adjusted'?' \u00b7 adjusted':''}</div><div class="row" style="gap:6px;margin:4px 0 2px">${podChip(x.pod)}${winChip(x)}${roleChips(id)}</div><div class="mut" style="margin-bottom:6px">${availText(x.availability)}</div><div class="bar"><i style="width:${Math.min(100,p/t*100)}%"></i></div></div>`}).join(''):(total?'<p class="mut">No households match this filter.</p>':'<p class="mut">No households yet.'+(adm?' Import the Excel file in Settings.':'')+'</p>')}</div>`;
   }else if(S.tab==='users'){
     const ps=S.users.filter(u=>u.role==='parent');
     h+=`<div class="card"><h2>Household accounts</h2>${ps.length?ps.map(u=>userRow(u,true)).join(''):'<p class="mut">No sign-ins yet.</p>'}</div>`;
@@ -243,29 +271,47 @@ function staffView(){
   }
   $('#app').innerHTML=h;
 }
+function privacyNotice(){const n=Object.values(S.hh).filter(h=>h.contactNumber!==undefined||h.masterEmail!==undefined).length;if(!n)return'';
+  return `<div class="card" style="border-left:4px solid var(--pend)"><b>Move contact details to private storage</b><p class="mut">${n} households still have phone numbers and emails stored where podmates' devices can read them. Moving them lets each household decide whether to share. Publish the new Firestore rules first.</p><button class="sm" onclick="A.migrateContacts()">Move now</button></div>`}
+function winBlock(w){const d=S.winDraft[w.id]??={day:w.day,start:w.start,end:w.end,hh:Object.keys(S.hh).filter(i=>S.hh[i].window===w.id).sort(natCmp).join(', ')};
+  return `<div class="blk"><div class="row sp"><b>${esc(winLabel(w))}</b><button class="text" style="min-height:40px;padding:0 8px" onclick="A.delWindow('${w.id}')">Delete</button></div>
+  <label for="wd${w.id}">Day</label><select id="wd${w.id}" onchange="S_.winDraft['${w.id}'].day=this.value">${DAYS.map(([k,f])=>`<option value="${k}"${d.day===k?' selected':''}>${f}</option>`).join('')}</select>
+  <div class="row" style="flex-wrap:nowrap"><div class="grow" style="min-width:0"><label for="ws${w.id}">From</label><input id="ws${w.id}" type="time" value="${d.start}" onchange="S_.winDraft['${w.id}'].start=this.value"></div><div class="grow" style="min-width:0"><label for="we${w.id}">To</label><input id="we${w.id}" type="time" value="${d.end}" onchange="S_.winDraft['${w.id}'].end=this.value"></div></div>
+  <label for="wh${w.id}">Households in this window</label><input id="wh${w.id}" value="${esc(d.hh)}" placeholder="H01, H10, H14" autocapitalize="characters" autocomplete="off" oninput="S_.winDraft['${w.id}'].hh=this.value">
+  <div style="margin-top:12px"><button class="sm" onclick="A.saveWindow('${w.id}')">Save window</button></div></div>`}
 function podsPanel(){const L=podNums(),leg=legacyPods(),dr=S.podDraft??={},none=Object.keys(S.hh).filter(i=>!S.hh[i].pod).sort(natCmp);
-  const body=`<p class="mut" style="margin-top:12px">Add a pod, type the household IDs in it separated by commas (like <b>H01, H10, H14</b>) and tap Save. IDs you add move into the pod, and IDs you remove are taken out.</p>
+  const body=`<p class="mut" style="margin-top:12px">Add a pod, type the household IDs in it separated by commas (like <b>H01, H10, H14</b>) and tap Save pod. Then add the pod's windows: the days and times it works at the farm.</p>
   ${none.length?`<p style="margin:0 0 12px"><b>Not in a pod yet (${none.length}):</b> <span class="mut">${none.join(', ')}</span></p>`:''}
-  ${L.map(n=>{const ms=Object.keys(S.hh).filter(i=>String(S.hh[i].pod||'')===n).sort(natCmp),v=dr[n]??ms.join(', ');
-    return pan('pod'+n,'Pod '+n,ms.length?ms.length+' household'+(ms.length===1?'':'s'):'Empty',`<label for="pt${n}">Households in Pod ${n}</label><input id="pt${n}" value="${esc(v)}" placeholder="H01, H10, H14" autocapitalize="characters" autocomplete="off" oninput="S_.podDraft['${n}']=this.value"><p class="mut" style="margin:6px 0 0">${ms.length?ms.map(i=>esc(hhName(i))).join(', '):'No one yet.'}</p>${glance(ms,S.hh)}<div class="row" style="margin-top:12px"><button class="sm" onclick="A.savePod('${n}')">Save pod</button><button class="sm ghost" onclick="A.delPod('${n}')">Delete pod</button></div>`)}).join('')||'<p class="mut">No pods yet. Tap + Add pod to make the first one.</p>'}
+  ${L.map(n=>{const ms=Object.keys(S.hh).filter(i=>String(S.hh[i].pod||'')===n).sort(natCmp),v=dr[n]??ms.join(', '),W=(S.cfg.windows||[]).filter(w=>String(w.pod)===n).sort(wSort);
+    return pan('pod'+n,'Pod '+n,(ms.length?ms.length+' household'+(ms.length===1?'':'s'):'Empty')+(W.length?' \u00b7 '+W.length+' window'+(W.length===1?'':'s'):''),`<label for="pt${n}">Households in Pod ${n}</label><input id="pt${n}" value="${esc(v)}" placeholder="H01, H10, H14" autocapitalize="characters" autocomplete="off" oninput="S_.podDraft['${n}']=this.value"><p class="mut" style="margin:6px 0 0">${ms.length?ms.map(i=>esc(hhName(i))).join(', '):'No one yet.'}</p><div style="margin-top:10px"><button class="sm" onclick="A.savePod('${n}')">Save pod</button></div>
+    <div style="margin-top:18px"><b>Windows</b><p class="mut" style="margin:2px 0 8px">A window is a day and time the pod works at the farm. Each household goes in one window.</p>${W.map(winBlock).join('')||'<p class="mut">No windows yet.</p>'}<button class="ghost sm" onclick="A.addWindow('${n}')">+ Add window</button></div>
+    ${glance(ms,S.hh)}<div style="margin-top:16px"><button class="sm ghost" onclick="A.delPod('${n}')">Delete pod</button></div>`)}).join('')||'<p class="mut">No pods yet. Tap + Add pod to make the first one.</p>'}
   <div class="row" style="margin-top:4px"><button class="ghost" onclick="A.addPod()">+ Add pod</button></div>
-  ${leg.length?`<div class="card" style="margin-top:12px"><b>Old pod names found</b><p class="mut">${leg.map(esc).join(', ')} \u2013 these are not numbered. Convert them to numbered pods to manage them here.</p><button class="sm" onclick="A.convertPods()">Convert to numbered pods</button></div>`:''}`;
-  return pan('pods','Pods',L.length?L.length+' pod'+(L.length===1?'':'s')+' \u00b7 tap to manage':'Set up pods',body)}
+  ${leg.length?`<div class="card" style="margin-top:12px"><b>Old pod names found</b><p class="mut" style="margin-bottom:0">${leg.map(esc).join(', ')} are not numbered pods. Typing their households into a numbered pod above replaces the old name.</p></div>`:''}`;
+  return pan('pods','Pods and windows',L.length?L.length+' pod'+(L.length===1?'':'s')+' \u00b7 tap to manage':'Set up pods',body)}
+function rolesPanel(){const R=S.cfg.roles||[],pods=podNums();
+  const body=`<p class="mut" style="margin-top:12px">Create a role like Pod Commander, then choose who holds it in each pod. A holder can pass the role to a podmate, who has to accept.</p>
+  ${R.map(r=>{const nh=Object.values(S.holders).filter(h=>h.roleId===r.id).length;
+    return pan('role'+r.id,esc(r.name),nh?nh+' pod'+(nh===1?'':'s')+' assigned':'Nobody assigned yet',`<label>Role name</label><input value="${esc(r.name)}" onchange="A.renameRole('${r.id}',this.value)"><label>What it does (optional)</label><input value="${esc(r.desc||'')}" placeholder="e.g. Confirms the crew count and runs the briefing" onchange="A.roleDesc('${r.id}',this.value)"><label style="margin-top:14px">Who holds it</label>${pods.map(n=>{const ms=Object.keys(S.hh).filter(i=>String(S.hh[i].pod||'')===n).sort(natCmp);if(!ms.length)return'';const cur=(S.holders[r.id+'_'+n]||{}).hhId||'';
+      return `<div class="row" style="flex-wrap:nowrap;margin-bottom:8px"><b style="min-width:52px">Pod ${n}</b><select aria-label="Holder in Pod ${n}" onchange="A.setHolder('${r.id}','${n}',this.value)"><option value="">Nobody yet</option>${ms.map(i=>`<option value="${i}"${cur===i?' selected':''}>${i} \u00b7 ${esc(S.hh[i].name)}</option>`).join('')}</select></div>`}).join('')||'<p class="mut">Set up pods first.</p>'}<p class="mut">Name and description save when you leave the field.</p><div style="margin-top:8px"><button class="sm ghost" onclick="A.delRole('${r.id}')">Delete role</button></div>`)}).join('')||'<p class="mut">No roles yet.</p>'}
+  <label for="nr">New role</label><div class="row" style="flex-wrap:nowrap"><input id="nr" placeholder="e.g. Pod Commander" style="min-width:0"><button style="flex:none" onclick="A.addRole()">Add</button></div>`;
+  return pan('roles','Roles',R.length?R.map(r=>esc(r.name)).join(', '):'Create roles like Pod Commander',body)}
 function userRow(u,all){
-  const hh=S.hh[u.householdId],ok=hh&&hh.masterEmail&&hh.masterEmail.toLowerCase()===(u.email||'').toLowerCase();
+  const hh=S.hh[u.householdId],me_=ctc(u.householdId).masterEmail,ok=me_&&me_.toLowerCase()===(u.email||'').toLowerCase();
   return `<div class="log"><div class="row sp"><b>${esc(u.email)}</b><span class="chip ${u.status==='active'?'approved':'pending'}">${u.status}</span></div>
   <div class="mut">Claims ${esc(u.householdId)} · ${esc(hhName(u.householdId))}</div>
-  <div style="font-size:13px;color:${ok?'var(--ok)':'var(--pend)'}">${ok?'✓ Matches the email on record':'⚠ Doesn\'t match the email on record'+(hh?.masterEmail?' ('+esc(hh.masterEmail)+')':'')}</div>
+  <div style="font-size:13px;color:${ok?'var(--ok)':'var(--pend)'}">${ok?'✓ Matches the email on record':'⚠ Doesn\'t match the email on record'+(me_?' ('+esc(me_)+')':'')}</div>
   <div class="row" style="margin-top:8px">${u.status==='pending'?`<button class="sm" onclick="A.userSet('${u.id}','active')">Approve</button><button class="sm ghost" onclick="A.userDel('${u.id}')">Reject</button>`:S.role==='admin'?`<button class="sm ghost" onclick="A.userDel('${u.id}')">Remove access</button>`:''}</div></div>`}
 
 /* ---------- modals ---------- */
 const open_=h=>{$('#sheet').innerHTML=h;$('#modal').classList.add('show')};
 function hhModal(id){
-  const x=S.hh[id],logs=S.att.filter(a=>a.hhId===id).sort((a,b)=>b.timeIn>a.timeIn?1:-1),adm=S.role==='admin';
+  const x=S.hh[id],c_=ctc(id),logs=S.att.filter(a=>a.hhId===id).sort((a,b)=>b.timeIn>a.timeIn?1:-1),adm=S.role==='admin';
   open_(`<div class="row sp"><h2 style="margin:0">${id} · ${esc(x.name)}</h2><button class="text" onclick="A.close()">Close</button></div>
-  <p class="mut">${esc(x.barangay||'')}<br>${esc(x.masterEmail||'no email on record')} · ${esc(x.contactNumber||'')}<br><b>${pts(id)}</b> / ${target(x)} points</p>${termRows(id,x)}
+  <p class="mut">${esc(x.barangay||'')}<br>${esc(c_.masterEmail||'no email on record')} · ${esc(c_.contactNumber||'')}<br><b>${pts(id)}</b> / ${target(x)} points</p>${termRows(id,x)}
   ${adm?`<label>Target type</label><select onchange="A.setTarget('${id}',this.value)"><option value="standard"${x.targetType!=='adjusted'?' selected':''}>Standard (${S.cfg.targetStandard})</option><option value="adjusted"${x.targetType==='adjusted'?' selected':''}>Adjusted (${S.cfg.targetAdjusted})</option></select>`:''}
   ${adm?`<label for="hp1">Pod</label><select id="hp1" onchange="A.setPod('${id}',this.value)"><option value="">No pod</option>${[...podNums(),...(x.pod&&!isNumPod(x.pod)?[x.pod]:[])].map(n=>`<option value="${esc(n)}"${String(x.pod||'')===n?' selected':''}>${esc(podLabel(n))}</option>`).join('')}</select>`:`<p class="mut">${esc(podLabel(x.pod))}</p>`}
+  ${x.pod?(adm?`<label for="hw1">Window</label><select id="hw1" onchange="A.setWindow('${id}',this.value)"><option value="">No window</option>${(S.cfg.windows||[]).filter(w=>String(w.pod)===String(x.pod)).sort(wSort).map(w=>`<option value="${w.id}"${x.window===w.id?' selected':''}>${esc(winLabel(w))}</option>`).join('')}</select>`:`<p class="mut">${esc(winLabel(winById(x.window))||'No window')}</p>`):''}${roleChips(id)?`<div class="row" style="margin-top:10px">${roleChips(id)}</div>`:''}
   <label>Days available at the farm</label>${adm?`<p class="mut" style="margin:0 0 8px">Tap to turn a time on or off. It saves right away.</p>${slotGrid(id,x.availability)}`:`<div class="row" style="gap:6px">${availChips(x.availability)}</div>`}
   <div class="row" style="margin:12px 0"><button class="sm" onclick="A.manualModal('${id}')">+ Add log</button><button class="sm ghost" onclick="A.buyoutModal('${id}')">Buy-out</button></div>
   ${logs.map(a=>logHtml(a,{actions:`<div class="row" style="margin-top:6px">${a.status!=='approved'?`<button class="sm" onclick="A.approve('${a.id}')">Approve</button>`:''}${a.status!=='voided'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button>`:''}${a.status!=='pending'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','pending')">Reopen</button>`:''}${adm?`<button class="sm ghost" onclick="A.delLog('${a.id}')">Delete</button>`:''}</div>`})).join('')||'<p class="mut">No logs yet.</p>'}`);
@@ -327,9 +373,9 @@ const A=window.A={
     const b=writeBatch(db),dir={};
     for(const [id,rs] of Object.entries(g)){
       const name=String(rs[0]['Last Name']).trim();dir[id]=name;
-      const d={name,barangay:first(rs,'Barangay'),masterEmail:first(rs,'E-mail Address').toLowerCase(),contactNumber:phone(first(rs,'Contact Number'))};
-      if(!existing[id]){d.targetType='standard';d.createdAt=Date.now()}
-      b.set(doc(db,'households',id),d,{merge:true});
+      const d={name,barangay:first(rs,'Barangay')},c={masterEmail:first(rs,'E-mail Address').toLowerCase(),contactNumber:phone(first(rs,'Contact Number'))};
+      if(!existing[id]){d.targetType='standard';d.createdAt=Date.now();c.shared=false}else if(existing[id].pod)c.pod=String(existing[id].pod);
+      b.set(doc(db,'households',id),d,{merge:true});b.set(doc(db,'contacts',id),c,{merge:true});
     }
     rows.forEach(r=>b.set(doc(db,'scholars',String(r['Scholar ID']).trim()),{householdId:String(r['Household ID']).trim(),firstName:String(r['First Name']).trim(),lastName:String(r['Last Name']).trim(),gradeLevel:String(r['Grade Level']).trim()}));
     b.set(doc(db,'config','program'),{directory:dir,...Object.fromEntries(Object.entries(DEF).filter(([k])=>k!=='directory'&&S.cfg[k]===DEF[k]).map(([k])=>[k,DEF[k]]))},{merge:true});
@@ -352,24 +398,42 @@ function termRows(id,h){const T=(S.cfg.terms||[]).filter(x=>x.end),t=target(h),t
     return `<div class="row sp mut"><span>${esc(x.name)} (by ${fmtD(x.end)}): ${thr} pts</span><b style="color:${ok?'var(--ok)':closed?'var(--void)':'var(--pend)'}">${ok?'Met':closed?'Not met':'In progress'}</b></div>`}).join('')}
 const slideEmbed=u=>{const m=String(u||'').match(/presentation\/d\/(e\/)?([\w-]+)/);return m?`https://docs.google.com/presentation/d/${m[1]||''}${m[2]}/embed?start=false&loop=false`:''};
 function programView(){const bl=S.cfg.programBlocks??(S.cfg.slidesUrl?[{type:'slides',title:'About the program',url:S.cfg.slidesUrl,md:''}]:[]);$('#app').innerHTML=programHtml(bl)}
-function podView(){const id=S.profile.householdId,pod=S.hh[id]?.pod;
+function reqCard(r){const from=S.podHh[r.fromHh]?.name||r.fromHh;
+  if(r.type==='contact')return `<div class="log"><div><b>${esc(from)}</b> asks you to share your contact details with your pod.</div><div class="mut" style="margin:4px 0 8px">Everyone in your pod would see your phone number and email. You can stop sharing any time.</div><div class="row"><button class="sm" onclick="A.answerReq('${r.id}',true)">Share</button><button class="sm ghost" onclick="A.answerReq('${r.id}',false)">Not now</button></div></div>`;
+  return `<div class="log"><div><b>${esc(from)}</b> wants to pass the <b>${esc(roleName(r.roleId)||'')}</b> role to you.</div><div class="mut" style="margin:4px 0 8px">The role moves to you only if you accept.</div><div class="row"><button class="sm" onclick="A.answerReq('${r.id}',true)">Accept</button><button class="sm ghost" onclick="A.answerReq('${r.id}',false)">Decline</button></div></div>`}
+function podView(){const id=S.profile.householdId,me=S.hh[id]||{},pod=me.pod;
   if(!pod)return $('#app').innerHTML='<div class="card"><h2>My pod</h2><p class="mut">You have not been placed in a pod yet. The Farm Liaison will add you.</p></div>';
-  const ids=Object.keys(S.podHh).sort(),pp=i=>i===id?pts(i):S.podAtt.filter(a=>a.hhId===i&&a.status==='approved').reduce((q,a)=>q+(a.points||0),0);
-  $('#app').innerHTML=`<div class="card"><h2>${esc(podLabel(pod))}</h2><p class="mut" style="margin:0">Only people in your pod can see this. Use it to coordinate and help each other.</p></div>${glance(ids,S.podHh,true)}<div class="card"><h2>Podmates</h2>${ids.map(i=>{const x=S.podHh[i],p=pp(i),help=standing(x,p)[1]==='voided';return `<div class="log"><div class="row sp"><b>${esc(x.name)}${i===id?' (you)':''}</b>${help?'<span class="chip warn">Could use a hand</span>':''}</div><div class="mut">${esc(x.barangay||'')} \u00b7 ${p} points</div><div class="row" style="gap:6px;margin-top:6px">${availChips(x.availability)}</div>${i!==id?`<div class="row">${x.contactNumber?`<a href="tel:${esc(x.contactNumber)}">${esc(x.contactNumber)}</a>`:''}${x.masterEmail?`<a href="mailto:${esc(x.masterEmail)}">${esc(x.masterEmail)}</a>`:''}</div>`:''}</div>`}).join('')}</div>`}
+  const ids=Object.keys(S.podHh).sort(natCmp),inc=incoming(),R=S.cfg.roles||[],myW=winById(me.window),cSh=S.myContact?.shared===true,pSh=S.myPp?.shown===true;
+  const wins=(S.cfg.windows||[]).filter(w=>String(w.pod)===String(pod)).sort(wSort),roleRows=R.map(r=>({r,k:r.id+'_'+pod,h:S.holders[r.id+'_'+pod]})).filter(x=>x.h);
+  const nm=i=>esc(S.podHh[i]?.name||i);
+  const incCard=inc.length?`<div class="card" style="border-left:4px solid var(--pend)"><h2>${inc.length} request${inc.length>1?'s':''} for you</h2>${inc.map(reqCard).join('')}</div>`:'';
+  const privacy=`<div class="card"><h2>Your privacy</h2>
+   <div class="log"><div class="row sp"><b>Contact details</b><span class="chip ${cSh?'approved':'nopod'}">${cSh?'Shared with pod':'Not shared'}</span></div><p class="mut" style="margin:6px 0 10px">${!S.myContact?'No contact details are on file for your household yet. Ask the Admin to add them.':cSh?'Your phone number and email are visible to your podmates.':'Your contact details are not shared with your podmates. Share?'}</p>${S.myContact?`<button class="sm${cSh?' ghost':''}" onclick="A.shareContact(${!cSh})">${cSh?'Stop sharing':'Share with my pod'}</button>`:''}</div>
+   <div class="log"><div class="row sp"><b>Points</b><span class="chip ${pSh?'approved':'nopod'}">${pSh?'Shown to pod':'Hidden'}</span></div><p class="mut" style="margin:6px 0 10px">${pSh?'Your podmates can see your points.':'Your points are hidden from your podmates.'} Podmates cannot ask you to show them.</p><button class="sm${pSh?' ghost':''}" onclick="A.sharePoints(${!pSh})">${pSh?'Hide my points':'Show my points to my pod'}</button></div></div>`;
+  const rolesCard=roleRows.length?`<div class="card"><h2>Roles in your pod</h2>${roleRows.map(({r,k,h})=>{const mine=h.hhId===id,offers=mine?S.reqFrom.filter(q=>q.type==='role'&&q.assignId===k):[];
+    return `<div class="log"><div class="row sp"><div><b>${esc(r.name)}</b>${r.desc?`<div class="mut">${esc(r.desc)}</div>`:''}</div><span class="chip role">${nm(h.hhId)}${mine?' (you)':''}</span></div>${offers.map(q=>`<div class="row sp mut" style="margin-top:6px"><span>${q.status==='pending'?'Waiting for '+nm(q.toHh)+' to accept':nm(q.toHh)+' declined'}</span><button class="text" onclick="A.cancelReq('${q.id}')">${q.status==='pending'?'Cancel':'Dismiss'}</button></div>`).join('')}${mine?`<div style="margin-top:8px"><button class="sm ghost" onclick="A.passRoleModal('${k}')">Pass this role\u2026</button></div>`:''}</div>`}).join('')}</div>`:'';
+  const winCard=wins.length?`<div class="card"><h2>When your pod meets</h2>${wins.map(w=>{const ms=ids.filter(i=>S.podHh[i].window===w.id);return `<div class="log"><div class="row sp"><b>${esc(winLabel(w))}</b>${me.window===w.id?'<span class="chip approved">Your window</span>':''}</div><div class="mut">${ms.length?ms.map(i=>nm(i)+(i===id?' (you)':'')).join(', '):'No households yet'}</div></div>`}).join('')}</div>`:'';
+  const cb=i=>{if(i===id)return'';const c=S.podContacts[i];
+    if(c)return `<div class="row" style="margin-top:6px">${c.contactNumber?`<a href="tel:${esc(c.contactNumber)}">${esc(c.contactNumber)}</a>`:''}${c.masterEmail?`<a href="mailto:${esc(c.masterEmail)}">${esc(c.masterEmail)}</a>`:''}</div>`;
+    const q=S.reqFrom.find(x=>x.id==='contact_'+id+'_'+i),pend=q&&q.status==='pending',dec=q&&q.status==='declined';
+    return `<div class="lock" style="margin-top:8px"><div class="mut">Contact details not shared.</div>${pend?`<div class="row sp" style="margin-top:4px"><span class="chip pending">Request sent</span><button class="text" onclick="A.cancelReq('${q.id}')">Cancel</button></div>`:`<div class="row sp" style="margin-top:4px">${dec?'<span class="mut">They are not sharing right now.</span>':'<span></span>'}<button class="sm ghost" onclick="A.askContact('${i}')">${dec?'Request again':'Ask them to share'}</button></div>`}</div>`};
+  const rows=ids.map(i=>{const x=S.podHh[i],self=i===id,p=self?pts(i):S.podPts[i]?.points,help=p!=null&&standing(x,p)[1]==='voided',wc=winChip(x);
+    return `<div class="log"><div class="row sp"><b>${esc(x.name)}${self?' (you)':''} <span class="mut" style="font-weight:400">${i}</span></b>${help?'<span class="chip warn">Could use a hand</span>':''}</div>${(roleChips(i)||wc)?`<div class="row" style="gap:6px;margin:4px 0">${roleChips(i)}${wc}</div>`:''}<div class="mut">${esc(x.barangay||'')} \u00b7 ${p!=null?p+' points':'Points hidden'}</div><div class="row" style="gap:6px;margin-top:6px">${availChips(x.availability)}</div>${cb(i)}</div>`}).join('');
+  $('#app').innerHTML=`<div class="card"><h2>${esc(podLabel(pod))}</h2><p class="mut" style="margin:0">${myW?'Your window: <b>'+esc(winLabel(myW))+'</b>. ':''}Only people in your pod can see this. Use it to coordinate and help each other.</p></div>${incCard}${privacy}${rolesCard}${winCard}${glance(ids,S.podHh,true)}<div class="card"><h2>Podmates</h2>${rows}</div>`}
 async function runBatch(fns){for(let i=0;i<fns.length;i+=400){const b=writeBatch(db);fns.slice(i,i+400).forEach(f=>f(b));await b.commit()}}
 async function assignPod(map){const ops=[];
-  for(const [id,pod] of Object.entries(map)){
-    ops.push(b=>b.update(doc(db,'households',id),{pod:pod?pod:deleteField()}));
-    S.att.filter(a=>a.hhId===id&&(a.pod||'')!==pod).forEach(a=>ops.push(b=>b.update(doc(db,'attendance',a.id),{pod})))}
+  for(const [id,pod] of Object.entries(map)){const moved=String(S.hh[id]?.pod||'')!==String(pod);
+    ops.push(b=>b.update(doc(db,'households',id),moved?{pod:pod?pod:deleteField(),window:deleteField()}:{pod:pod?pod:deleteField()}));
+    if(moved){if(S.contacts[id])ops.push(b=>b.update(doc(db,'contacts',id),{pod,shared:false}));
+      if(S.pp[id])ops.push(b=>b.update(doc(db,'podpoints',id),{pod,shown:false}));
+      Object.entries(S.holders).filter(([k,v])=>v.hhId===id&&String(v.pod)!==String(pod)).forEach(([k])=>ops.push(b=>b.delete(doc(db,'roleHolders',k))))}}
   await runBatch(ops)}
 const regPods=async l=>{const t=new Set([...(S.cfg.pods||[]),...l].map(String));await setDoc(doc(db,'config','program'),{pods:[...t].sort((a,b)=>a-b)},{merge:true})};
-const PODS={'1':'H01 H10 H14 H15 H18 H30','2':'H02 H04 H28','3':'H24 H34','4':'H16 H21','5':'H17','6':'H05 H06 H07 H09','7':'H11 H12 H27 H31','8':'H20 H23 H29 H36','9':'H22 H33 H35'};
+
 const loc=iso=>{const d=new Date(iso);return `${ymd(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`};
 Object.assign(A,{
  cancelIn:guard(async()=>{await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:null});toast('Cancelled')}),
  setPod:guard(async(id,v)=>{v=String(v||'').trim();await assignPod({[id]:v});toast(v?'Moved to '+podLabel(v):'Removed from pod')}),
- seedPods:guard(async()=>{if(!confirm('Set pods 1 to 9 from the Ugnayan Gulayan window table? This overwrites current pods.'))return;const map={};let n=0;
-   for(const [pod,l] of Object.entries(PODS))l.split(' ').forEach(id=>{if(S.hh[id]){map[id]=pod;n++}});await assignPod(map);await regPods(Object.keys(PODS));toast(n+' households placed')}),
  addPod:guard(async()=>{const L=podNums().map(Number),n=String((L.length?Math.max(...L):0)+1);S.open.pods=true;S.open['pod'+n]=true;await regPods([n]);toast('Pod '+n+' added')}),
  savePod:guard(async n=>{document.activeElement?.blur?.();
    const raw=($('#pt'+n)?.value??'').split(/[\s,;]+/).map(t=>t.trim()).filter(Boolean);
@@ -386,10 +450,6 @@ Object.assign(A,{
    if(!confirm('Delete Pod '+n+'?'+(ms.length?'\n'+ms.length+' household(s) will be left without a pod.':'')))return;
    const map={};ms.forEach(i=>map[i]='');await assignPod(map);
    await setDoc(doc(db,'config','program'),{pods:(S.cfg.pods||[]).map(String).filter(p=>p!==n)},{merge:true});delete S.podDraft[n];toast('Pod '+n+' deleted')}),
- convertPods:guard(async()=>{const leg=legacyPods();if(!leg.length)return;const L=podNums().map(Number);let nx=(L.length?Math.max(...L):0)+1;
-   const ord=[...leg].sort((a,b)=>{const x=OLD_ORDER.indexOf(a),y=OLD_ORDER.indexOf(b);return(x<0?99:x)-(y<0?99:y)||String(a).localeCompare(String(b))}),mp={};ord.forEach(o=>mp[o]=String(nx++));
-   if(!confirm('Convert old pod names?\n\n'+ord.map(o=>o+'  \u2192  Pod '+mp[o]).join('\n')))return;
-   const map={};Object.keys(S.hh).forEach(i=>{const q=S.hh[i].pod;if(q&&mp[q])map[i]=mp[q]});await assignPod(map);await regPods(Object.values(mp));toast('Pods converted')}),
  toggleSlot:async(id,btn)=>{btn.classList.toggle('on');btn.setAttribute('aria-pressed',btn.classList.contains('on'));
    const av=[...btn.parentElement.querySelectorAll('.slot.on')].map(b=>b.dataset.k);
    try{await updateDoc(doc(db,'households',id),{availability:av})}catch(e){console.error(e);btn.classList.toggle('on');btn.setAttribute('aria-pressed',btn.classList.contains('on'));toast('Could not save: '+(e.code||e.message))}},
@@ -501,7 +561,7 @@ function settingsHtml(){const c=S.cfg,nb=(S.pb||initBlocks()).length;
   +pan('clock','Clock-in',c.clockOpen+' to '+c.clockClose,`<label>Clock-in opens</label><input id="cO" type="time" value="${c.clockOpen}"><label>Clock-in closes</label><input id="cC" type="time" value="${c.clockClose}"><label>Auto-close open sessions after (hours)</label><input id="cM" type="number" inputmode="numeric" value="${c.maxShiftHours}"><div style="margin-top:14px"><button onclick="A.saveClock()">Save</button></div>`)
   +pan('terms','Terms',(c.terms||[]).length+' terms',`<p class="mut">Name, end date, and % of the target due by then. End dates are optional for now.</p><div id="termsBox">${termsHtml()}</div><div class="row"><button class="ghost sm" onclick="A.addTerm()">+ Add term</button><button class="ghost sm" onclick="A.evenTerms()">Spread evenly</button></div><div style="margin-top:14px"><button onclick="A.saveTerms()">Save</button></div>`)
   +pan('page','Program page',nb+' block'+(nb===1?'':'s'),`<p class="mut">Households see these blocks in this order. Drag the handle \u2807 or use \u25b2 \u25bc to reorder. Text supports Markdown: <code># Heading</code>, <code>**bold**</code>, <code>- list</code>, <code>[link](https://...)</code>.</p><div id="blkBox">${blocksHtml()}</div><div class="row"><button class="ghost" onclick="A.addBlk('slides')">+ Slides</button><button class="ghost" onclick="A.addBlk('text')">+ Text</button></div><div class="row" style="margin-top:14px"><button onclick="A.saveBlocks()">Save</button><button class="ghost" onclick="A.previewBlocks()">Preview</button></div>`)
-  +pan('data','Excel and pods','Import, export, load pods',`<p class="mut">Import the scholar sheet "Sorted by Barangay". Existing households keep their target type.</p><input id="xf" type="file" accept=".xlsx,.xls"><div class="row" style="margin-top:12px"><button onclick="A.importXlsx()">Import</button><button class="ghost" onclick="A.exportXlsx()">Export year</button><button class="ghost" onclick="A.seedPods()">Load pods</button></div>`)}
+  +pan('data','Excel','Import and export',`<p class="mut">Import the scholar sheet "Sorted by Barangay". Existing households keep their target type.</p><input id="xf" type="file" accept=".xlsx,.xls"><div class="row" style="margin-top:12px"><button onclick="A.importXlsx()">Import</button><button class="ghost" onclick="A.exportXlsx()">Export year</button></div>`)}
 Object.assign(A,{
  setBlk:(i,k,v)=>{if(S.pb&&S.pb[i])S.pb[i][k]=v},
  addBlk:t=>{S.pb??=initBlocks();S.pb.push({id:uid(),type:t,title:'',url:'',md:''});redrawBlk();const l=$('#blkBox').lastElementChild;if(l)l.scrollIntoView({behavior:'smooth',block:'center'})},
@@ -519,12 +579,60 @@ Object.assign(A,{
    if(dated&&terms.length&&terms[terms.length-1].pct!==100&&!confirm('The last term is not 100% of the target. Save anyway?'))return;
    await setDoc(doc(db,'config','program'),{terms},{merge:true});S.td=null;A.r();toast('Terms saved')})
 });
+Object.assign(A,{
+ migrateContacts:guard(async()=>{const ids=Object.keys(S.hh).filter(i=>S.hh[i].contactNumber!==undefined||S.hh[i].masterEmail!==undefined);if(!ids.length)return toast('Nothing to move');
+   if(!confirm('Move the contact details of '+ids.length+' households to private storage? Nothing is lost. Podmates will only see them if the household agrees.'))return;
+   const ops=[];ids.forEach(i=>{const h=S.hh[i];ops.push(b=>b.set(doc(db,'contacts',i),{contactNumber:h.contactNumber||'',masterEmail:h.masterEmail||'',pod:h.pod?String(h.pod):'',shared:S.contacts[i]?.shared===true},{merge:true}));ops.push(b=>b.update(doc(db,'households',i),{contactNumber:deleteField(),masterEmail:deleteField()}))});
+   await runBatch(ops);toast('Contact details moved')}),
+ addWindow:guard(async n=>{const w={id:uid(),pod:String(n),day:'Mon',start:'08:00',end:'11:00'};S.open.pods=true;S.open['pod'+n]=true;await setDoc(doc(db,'config','program'),{windows:[...(S.cfg.windows||[]),w]},{merge:true});toast('Window added. Set its day, time and households.')}),
+ saveWindow:guard(async wid=>{document.activeElement?.blur?.();const w=(S.cfg.windows||[]).find(x=>x.id===wid),d=S.winDraft[wid];if(!w||!d)return;
+   if(!d.start||!d.end||d.end<=d.start)return toast('The end time must be after the start time');
+   const{ids,bad}=parseIds(d.hh);if(bad.length)return toast('Not found: '+bad.join(', '));
+   const out=ids.filter(i=>String(S.hh[i].pod||'')!==String(w.pod));if(out.length)return toast(out.join(', ')+(out.length>1?' are':' is')+' not in Pod '+w.pod+'. Add to the pod first.');
+   const cur=Object.keys(S.hh).filter(i=>S.hh[i].window===wid),add=ids.filter(i=>!cur.includes(i)),rem=cur.filter(i=>!ids.includes(i));
+   const wins=(S.cfg.windows||[]).map(x=>x.id===wid?{...x,day:d.day,start:d.start,end:d.end}:x),ops=[b=>b.set(doc(db,'config','program'),{windows:wins},{merge:true})];
+   add.forEach(i=>ops.push(b=>b.update(doc(db,'households',i),{window:wid})));rem.forEach(i=>ops.push(b=>b.update(doc(db,'households',i),{window:deleteField()})));
+   await runBatch(ops);delete S.winDraft[wid];toast('Window saved')}),
+ delWindow:guard(async wid=>{const w=(S.cfg.windows||[]).find(x=>x.id===wid);if(!w)return;const ms=Object.keys(S.hh).filter(i=>S.hh[i].window===wid);
+   if(!confirm('Delete '+winLabel(w)+'?'+(ms.length?'\n'+ms.length+' household(s) will have no window.':'')))return;
+   const ops=ms.map(i=>b=>b.update(doc(db,'households',i),{window:deleteField()}));ops.push(b=>b.set(doc(db,'config','program'),{windows:(S.cfg.windows||[]).filter(x=>x.id!==wid)},{merge:true}));await runBatch(ops);delete S.winDraft[wid];toast('Window deleted')}),
+ setWindow:guard(async(id,v)=>{await updateDoc(doc(db,'households',id),{window:v||deleteField()});S.winDraft={};toast(v?'Window set':'Window cleared')}),
+ addRole:guard(async()=>{const n=($('#nr')?.value||'').trim();if(!n)return toast('Type a role name first');const r={id:uid(),name:n,desc:''};S.open.roles=true;S.open['role'+r.id]=true;
+   await setDoc(doc(db,'config','program'),{roles:[...(S.cfg.roles||[]),r]},{merge:true});toast('Role added. Choose who holds it in each pod.')}),
+ renameRole:guard(async(id,v)=>{v=v.trim();if(!v)return toast('A role needs a name');await setDoc(doc(db,'config','program'),{roles:(S.cfg.roles||[]).map(r=>r.id===id?{...r,name:v}:r)},{merge:true});toast('Saved')}),
+ roleDesc:guard(async(id,v)=>{await setDoc(doc(db,'config','program'),{roles:(S.cfg.roles||[]).map(r=>r.id===id?{...r,desc:v.trim()}:r)},{merge:true});toast('Saved')}),
+ delRole:guard(async id=>{const r=(S.cfg.roles||[]).find(x=>x.id===id);if(!r||!confirm('Delete the role "'+r.name+'"? Everyone holding it will lose it.'))return;
+   const ops=Object.entries(S.holders).filter(([k,v])=>v.roleId===id).map(([k])=>b=>b.delete(doc(db,'roleHolders',k)));ops.push(b=>b.set(doc(db,'config','program'),{roles:(S.cfg.roles||[]).filter(x=>x.id!==id)},{merge:true}));await runBatch(ops);toast('Role deleted')}),
+ setHolder:guard(async(id,pod,hh)=>{const k=id+'_'+pod;if(!hh){await deleteDoc(doc(db,'roleHolders',k));toast('Role cleared')}else{await setDoc(doc(db,'roleHolders',k),{roleId:id,pod:String(pod),hhId:hh});toast(hh+' is now '+roleName(id)+' for Pod '+pod)}}),
+ /* ----- parents ----- */
+ shareContact:guard(async v=>{if(isStaff())return;const id=S.profile.householdId,pod=String(S.hh[id]?.pod||'');if(!S.myContact)return toast('No contact details on file yet');
+   const b=writeBatch(db),now=Date.now();b.update(doc(db,'contacts',id),{shared:v});
+   if(v)S.reqTo.filter(r=>r.type==='contact'&&r.status==='pending'&&String(r.pod)===pod).forEach(r=>b.update(doc(db,'requests',r.id),{status:'accepted',updatedAt:now}));
+   await b.commit();toast(v?'Your contact details are now shared with your pod':'You stopped sharing your contact details')}),
+ sharePoints:guard(async v=>{if(isStaff())return;const id=S.profile.householdId,pod=S.hh[id]?.pod;if(!pod)return toast('You are not in a pod yet');const p=pts(id);
+   if(S.myPp)await updateDoc(doc(db,'podpoints',id),{shown:v,points:p});else await setDoc(doc(db,'podpoints',id),{pod:String(pod),shown:v,points:p});toast(v?'Your points are now visible to your pod':'Your points are hidden')}),
+ askContact:guard(async to=>{if(isStaff())return;const id=S.profile.householdId,pod=String(S.hh[id]?.pod||''),rid='contact_'+id+'_'+to,ex=S.reqFrom.find(r=>r.id===rid),now=Date.now();
+   if(ex&&ex.status==='pending')return toast('You already asked');
+   if(ex)await updateDoc(doc(db,'requests',rid),{status:'pending',updatedAt:now});else await setDoc(doc(db,'requests',rid),{type:'contact',pod,fromHh:id,toHh:to,status:'pending',createdAt:now,updatedAt:now});toast('Request sent')}),
+ cancelReq:guard(async rid=>{await deleteDoc(doc(db,'requests',rid))}),
+ answerReq:guard(async(rid,ok)=>{const r=S.reqTo.find(q=>q.id===rid);if(!r)return;const id=S.profile.householdId,now=Date.now();
+   if(!ok){await updateDoc(doc(db,'requests',rid),{status:'declined',updatedAt:now});return toast('Declined. They can ask again.')}
+   if(r.type==='contact')return A.shareContact(true);
+   const h=S.holders[r.assignId];if(!h||h.hhId!==r.fromHh)return toast('That role has already moved');
+   const b=writeBatch(db);b.update(doc(db,'roleHolders',r.assignId),{hhId:id});b.delete(doc(db,'requests',rid));await b.commit();toast('You now hold '+roleName(r.roleId))}),
+ passRoleModal(k){const id=S.profile.householdId,h=S.holders[k];if(!h||h.hhId!==id)return;const ids=Object.keys(S.podHh).filter(i=>i!==id).sort(natCmp);
+   open_(`<h2>Pass ${esc(roleName(h.roleId)||'role')}</h2><p class="mut">Choose a podmate. They get a request, and the role moves only if they accept.</p><label for="rp">Podmate</label><select id="rp">${ids.map(i=>`<option value="${i}">${esc(S.podHh[i].name)} (${i})</option>`).join('')}</select><div class="row" style="margin-top:14px"><button onclick="A.sendRole('${k}')">Send request</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
+ sendRole:guard(async k=>{const id=S.profile.householdId,h=S.holders[k],to=$('#rp')?.value;if(!h||h.hhId!==id||!to)return;const rid='role_'+k+'_'+to,ex=S.reqFrom.find(q=>q.id===rid),now=Date.now();
+   if(ex&&ex.status==='pending')return toast('You already asked them');
+   if(ex)await updateDoc(doc(db,'requests',rid),{status:'pending',updatedAt:now});else await setDoc(doc(db,'requests',rid),{type:'role',roleId:h.roleId,assignId:k,pod:String(h.pod),fromHh:id,toHh:to,status:'pending',createdAt:now,updatedAt:now});
+   A.close();toast('Request sent')})
+});
 document.addEventListener('pointerdown',e=>{const g=e.target.closest&&e.target.closest('[data-grip]');if(!g||S.role!=='admin')return;e.preventDefault();
   const box=$('#blkBox'),el=g.closest('.blk');if(!box||!el)return;el.classList.add('drag');g.setPointerCapture(e.pointerId);
   const mv=ev=>{const y=ev.clientY;if(y<90)scrollBy(0,-14);else if(y>innerHeight-90)scrollBy(0,14);const nx=[...box.children].filter(c=>c!==el).find(c=>{const r=c.getBoundingClientRect();return y<r.top+r.height/2});box.insertBefore(el,nx||null)};
   const up=()=>{g.removeEventListener('pointermove',mv);g.removeEventListener('pointerup',up);g.removeEventListener('pointercancel',up);S.pb=[...box.children].map(c=>S.pb.find(b=>b.id===c.dataset.id));redrawBlk()};
   g.addEventListener('pointermove',mv);g.addEventListener('pointerup',up);g.addEventListener('pointercancel',up)});
-const ADM=['saveClock','saveTerms','saveBlocks','addBlk','delBlk','moveBlk','setBlk','previewBlocks','startYearModal','endYearModal','startYear','endYear','undoLast','exportYear','endPreview','addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','seedPods','setTarget','setPod','delLog','userDel','savePod','delPod','addPod','convertPods','toggleSlot'],STF=['approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
+const ADM=['saveClock','saveTerms','saveBlocks','addBlk','delBlk','moveBlk','setBlk','previewBlocks','startYearModal','endYearModal','startYear','endYear','undoLast','exportYear','endPreview','addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','setTarget','setPod','delLog','userDel','savePod','delPod','addPod','toggleSlot','migrateContacts','addWindow','saveWindow','delWindow','setWindow','addRole','renameRole','roleDesc','delRole','setHolder'],STF=['approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
 ADM.forEach(k=>{const f=A[k];A[k]=(...a)=>S.role==='admin'?f(...a):null});
 STF.forEach(k=>{const f=A[k];A[k]=(...a)=>isStaff()?f(...a):null});
 window.S_=S;
