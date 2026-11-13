@@ -31,8 +31,6 @@ label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
 .mut{color:var(--mut);font-size:13px}.log{padding:12px 0;border-top:1px solid var(--line)}.log:first-child{border-top:0}
 .ring{display:block;margin:6px auto}.ring text{font-family:Roboto}
 .hero{text-align:center}.hero .std{margin-top:4px}
-.clock{position:sticky;bottom:calc(14px + env(safe-area-inset-bottom));z-index:4}
-.clock button{width:100%;min-height:64px;font-size:20px;border-radius:32px;box-shadow:0 4px 14px rgba(20,60,20,.35)}
 nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:6}
 nav button{flex:1;background:none;color:var(--mut);border-radius:0;min-height:60px;font-size:12px;position:relative}
 nav button.on{color:var(--pri);box-shadow:inset 0 3px 0 var(--pri)}
@@ -150,7 +148,6 @@ const roleChips=hh=>Object.values(S.holders).filter(v=>v.hhId===hh&&roleName(v.r
 /* Contact lookup: prefer the contacts doc, fall back to legacy fields on the
    household doc (that's where older imports put phone + email). */
 const ctc=id=>{const c=S.contacts[id]||{},h=S.hh[id]||{};return{masterEmail:c.masterEmail||h.masterEmail||'',contactNumber:c.contactNumber||h.contactNumber||'',shared:c.shared===true}};
-const ctcOf=(id)=>{const c=id===S.profile?.householdId?S.myContact||{}:{},h=S.hh[id]||{};return{masterEmail:c.masterEmail||h.masterEmail||'',contactNumber:c.contactNumber||h.contactNumber||'',shared:c.shared===true}};
 const incoming=()=>{const pod=String(S.hh[S.profile?.householdId]?.pod||'');return S.reqTo.filter(r=>r.status==='pending'&&String(r.pod)===pod&&(r.type==='contact'||(roleName(r.roleId)&&S.holders[r.assignId]?.hhId===r.fromHh)))};
 function parseIds(text){const raw=String(text||'').split(/[\s,;]+/).map(t=>t.trim()).filter(Boolean),ids=[],bad=[];
   const norm=t=>{const u=t.toUpperCase();if(S.hh[u])return u;const m=/^H?0*(\d+)$/.exec(u);if(m)for(const c of['H'+pad(m[1]),'H'+m[1]])if(S.hh[c])return c;return null};
@@ -251,9 +248,8 @@ function parentView(){if(S.ptab==='program')return programView();if(S.ptab==='po
   <svg class="ring" width="220" height="220" viewBox="0 0 220 220" role="img" aria-label="${p} of ${t} points"><circle cx="110" cy="110" r="90" fill="none" stroke="#e3ebe3" stroke-width="16"/><circle cx="110" cy="110" r="90" fill="none" stroke="#2e7d32" stroke-width="16" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-frac)}" transform="rotate(-90 110 110)"/><text x="110" y="112" text-anchor="middle" font-size="48" font-weight="700" fill="#1b5e20">${p}</text><text x="110" y="140" text-anchor="middle" font-size="15" fill="#5f6f61">of ${t} points</text></svg>
   <p class="mut std">Every farm day adds to your points. Thank you for showing up!</p>
   ${outPts?`<p class="mut" style="color:var(--pend);margin:6px 0 0">${outPts} approved point(s) fall outside the program year and are not counted.</p>`:''}</div>
-  ${open?`<div class="card hero"><div class="mut">Working since ${fmtT(open)}</div><div id="tm" style="font-size:40px;font-weight:500">0:00:00</div><div class="mut" id="tmh"></div>${Date.now()-new Date(open)<3e5?`<button class="text" onclick="A.cancelIn()">Tapped by mistake? Cancel</button>`:''}</div>`:''}
-  <div class="card"><h2>History</h2>${mine.length?mine.map(a=>logHtml(a)).join(''):'<p class="mut">No logs yet. Tap Clock in when you start work.</p>'}</div>${pastHtml(id)}
-  <div class="clock">${open?`<button class="red" onclick="A.clockOutModal()">CLOCK OUT</button>`:clockBtn()}</div>`;
+  ${open?`<div class="card hero"><div class="mut">Working since ${fmtT(open)}</div><div id="tm" style="font-size:40px;font-weight:500">0:00:00</div><div class="mut" id="tmh"></div>${Date.now()-new Date(open)<3e5?`<button class="text" onclick="A.cancelIn()">Tapped by mistake? Cancel</button>`:''}<div style="margin-top:10px"><button class="red" style="width:100%;min-height:64px;font-size:20px;border-radius:32px" onclick="A.clockOutModal()">CLOCK OUT</button></div></div>`:`<div class="card" style="text-align:center">${clockBtn()}</div>`}
+  <div class="card"><h2>History</h2>${mine.length?mine.map(a=>logHtml(a)).join(''):'<p class="mut">No logs yet. Tap Clock in when you start work.</p>'}</div>${pastHtml(id)}`;
   if(open){const tick=()=>{const s=Math.max(0,Math.floor((Date.now()-new Date(open))/1000));$('#tm').textContent=`${Math.floor(s/3600)}:${pad(Math.floor(s/60)%60)}:${pad(s%60)}`;$('#tmh').textContent=s>=7200?'2-hour minimum reached':'Counts for points after 2 hours'};tick();S.timer=setInterval(tick,1000)}
 }
 
@@ -330,7 +326,7 @@ function hhModal(id){
   ${x.pod?(adm?`<label for="hw1">Window</label><select id="hw1" onchange="A.setWindow('${id}',this.value)"><option value="">No window</option>${(S.cfg.windows||[]).filter(w=>String(w.pod)===String(x.pod)).sort(wSort).map(w=>`<option value="${w.id}"${x.window===w.id?' selected':''}>${esc(winLabel(w))}</option>`).join('')}</select>`:`<p class="mut">${esc(winLabel(winById(x.window))||'No window')}</p>`):''}${roleChips(id)?`<div class="row" style="margin-top:10px">${roleChips(id)}</div>`:''}
   <label>Days available at the farm</label>${adm?`<p class="mut" style="margin:0 0 8px">Tap to turn a time on or off. It saves right away.</p>${slotGrid(id,x.availability)}`:`<div class="row" style="gap:6px">${availChips(x.availability)}</div>`}
   <div class="row" style="margin:12px 0"><button class="sm" onclick="A.manualModal('${id}')">+ Add log</button><button class="sm ghost" onclick="A.buyoutModal('${id}')">Buy-out</button></div>
-  ${logs.map(a=>logHtml(a,{actions:`<div class="row" style="margin-top:6px">${a.status!=='approved'?`<button class="sm" onclick="A.approve('${a.id}')">Approve</button>`:''}${a.status!=='voided'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button>`:''}${a.status!=='pending'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','pending')">Reopen</button>`:''}${adm?`<button class="sm ghost" onclick="A.delLog('${a.id}')">Delete</button>`:''}</div>`})).join('')||'<p class="mut">No logs yet.</p>'}`,()=>hhModal(id));
+  ${logs.map(a=>logHtml(a,{actions:`<div class="row" style="margin-top:6px">${a.status!=='approved'?`<button class="sm" onclick="A.approve('${a.id}')">Approve</button>`:''}${a.status!=='voided'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button>`:''}${a.status!=='pending'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','pending')">Reopen</button>`:''}${adm?`<button class="sm ghost" onclick="A.delLog('${a.id}')">Delete</button>`:''}</div>`})).join('')||'<p class="mut">No logs yet.</p>'`,()=>hhModal(id));
 }
 function manualModal(pre=''){
   const now=new Date(),ids=Object.keys(S.hh).sort(),loc=d=>`${ymd(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -409,13 +405,13 @@ const A=window.A={
 };
 
 const inWin=()=>{const n=new Date(),m=n.getHours()*60+n.getMinutes(),f=t=>{const[h,k]=String(t).split(':');return +h*60+ +k};return m>=f(S.cfg.clockOpen)&&m<f(S.cfg.clockClose)};
-const clockBtn=()=>yearOver()?`<button disabled>CLOCK IN</button><p class="mut" style="text-align:center;margin:6px 0 0">The ${yLabel(S.cfg.currentYear)} year has ended. The new year hasn't started yet.</p>`:inWin()?`<button onclick="A.clockIn()">CLOCK IN</button>`:`<button disabled>CLOCK IN</button><p class="mut" style="text-align:center;margin:6px 0 0">Clock-in is open ${S.cfg.clockOpen} to ${S.cfg.clockClose}</p>`;
+const clockBtn=()=>yearOver()?`<button disabled style="width:100%;min-height:64px;font-size:20px;border-radius:32px">CLOCK IN</button><p class="mut" style="text-align:center;margin:6px 0 0">The ${yLabel(S.cfg.currentYear)} year has ended. The new year hasn't started yet.</p>`:inWin()?`<button style="width:100%;min-height:64px;font-size:20px;border-radius:32px" onclick="A.clockIn()">CLOCK IN</button>`:`<button disabled style="width:100%;min-height:64px;font-size:20px;border-radius:32px">CLOCK IN</button><p class="mut" style="text-align:center;margin:6px 0 0">Clock-in is open ${S.cfg.clockOpen} to ${S.cfg.clockClose}</p>`;
 async function sweep(uid,u){if(!u?.activeClockIn||(Date.now()-new Date(u.activeClockIn))/36e5<S.cfg.maxShiftHours)return;
   const tin=new Date(u.activeClockIn),tout=new Date(+tin+S.cfg.maxShiftHours*36e5);
   try{await setDoc(doc(db,'attendance',`auto_${uid}_${tin.getTime()}`),{hhId:u.householdId,pod:S.hh[u.householdId]?.pod||'',date:ymd(tin),timeIn:tin.toISOString(),timeOut:tout.toISOString(),durationHours:+S.cfg.maxShiftHours,note:'Auto-closed: no clock-out',autoClosed:true,status:'pending',points:0,loggedBy:uid,approvedBy:''})}catch(e){}
   try{await updateDoc(doc(db,'users',uid),{activeClockIn:null})}catch(e){}}
 function termRows(id,h){const T=(S.cfg.terms||[]).filter(x=>x.end),t=target(h),today=ymd(new Date());
-  return T.map(x=>{const thr=Math.round(t*x.pct/100),got=S.att.filter(a=>a.hhId===id&&a.status==='approved'&&inRange(a.date,'',x.end)&&inYear(a)).reduce((q,a)=>q+(a.points||0),0),closed=x.end<today,ok=got>=thr;
+  return T.map(x=>{const thr=Math.round(t*x.pct/100),got=S.att.filter(a=>a.hhId===id&&a.status==='approved'&&inRange(a.date,'',x.end)&&inYear(a)).reduce((q,a)=>q+(a.points||0),0),closed=toD(x.end)<today,ok=got>=thr;
     return `<div class="row sp mut"><span>${esc(x.name)} (by ${fmtD(x.end)}): ${thr} pts</span><b style="color:${ok?'var(--ok)':closed?'var(--void)':'var(--pend)'}">${ok?'Met':closed?'Not met':'In progress'}</b></div>`}).join('')}
 const slideEmbed=u=>{const m=String(u||'').match(/presentation\/d\/(e\/)?([\w-]+)/);return m?`https://docs.google.com/presentation/d/${m[1]||''}${m[2]}/embed?start=false&loop=false`:''};
 function programView(){const bl=S.cfg.programBlocks??(S.cfg.slidesUrl?[{type:'slides',title:'About the program',url:S.cfg.slidesUrl,md:''}]:[]);$('#app').innerHTML=programHtml(bl)}
@@ -516,7 +512,7 @@ function pastHtml(id){const L=(S.cfg.pastYears||[]).filter(y=>y.id!==S.cfg.curre
 function yearsView(){const c=S.cfg,cur=c.currentYear,open=cur&&!c.yearEnd,ev=lastEvt();
   const sm=summarize(yearRows(c.yearStart,c.yearEnd)),ys=[...S.years].sort((a,b)=>a.id<b.id?1:-1);
   return `<div class="card"><div class="row sp"><div><div class="mut">Program year</div><h2 style="margin:0;font-size:26px">${cur?yLabel(cur):'Not started'}</h2><div class="mut">${cur?(open?'Open since ':'Ended ')+fmtD(open?c.yearStart:c.yearEnd):'Start your first year to begin counting.'}</div></div><span class="chip ${open?'approved':'pending'}">${open?'Open':cur?'Ended':'None'}</span></div>
-  ${cur?kpi(sm):''}<div class="row">${cur?`<button class="ghost" onclick="A.exportYear('${cur}')">Export Excel</button>`:''}${open?`<button class="red" onclick="A.endYearModal()">End year\u2026</button>`:`<button onclick="A.startYearModal()">Start ${cur?'next':'first'} year\u2026</button>`}</div></div>
+  ${cur?kpi(sm):''}<div class="row">${cur?`<button class="ghost" onclick="A.exportYear('${cur}')">Export Excel</button><button class="ghost" onclick="A.editYearModal()">Edit year</button>`:''}${open?`<button class="red" onclick="A.endYearModal()">End year\u2026</button>`:`<button onclick="A.startYearModal()">Start ${cur?'next':'first'} year\u2026</button>`}</div></div>
   ${ev?`<div class="card" style="border-left:4px solid var(--pend)"><div class="row sp"><div><b>Last change: ${ev.type==='end'?'Ended':'Started'} ${yLabel(ev.year)}</b><div class="mut">${new Date(ev.at).toLocaleString()} by ${esc(ev.by)}</div></div><button class="ghost" onclick="A.undoLast()">Undo</button></div></div>`:''}
   <div class="card"><h2>All years</h2>${ys.length?ys.map(y=>`<div class="log row sp"><div><b>${yLabel(y.id)}</b><div class="mut">${fmtD(y.start)} \u2013 ${y.end?fmtD(y.end):'open'}${y.summary?' \u00b7 '+y.summary.points+' points':''}</div></div><button class="ghost sm" onclick="A.exportYear('${y.id}')">Export</button></div>`).join(''):'<p class="mut">No years saved yet.</p>'}</div>`}
 const endPrev=()=>{const c=S.cfg,e=$('#yE').value||ymd(new Date()),sm=summarize(yearRows(c.yearStart,e));$('#yP').innerHTML=kpi(sm)+(sm.pending?`<label class="row" style="color:var(--txt);font-size:14px"><input id="yK" type="checkbox" style="width:24px;min-height:24px"> I understand pending logs won't be counted</label>`:'')};
@@ -532,6 +528,33 @@ Object.assign(A,{
   b.set(doc(db,'config','program'),{yearEnd:end,pastYears:past},{merge:true});
   b.set(doc(collection(db,'yearEvents')),{type:'end',year:id,at:Date.now(),by,before:snap(),undone:false});
   await b.commit();A.close();toast('Year ended. You can undo this.')}),
+ editYearModal(){const c=S.cfg;
+  open_(`<h2>Edit program year</h2>
+    <p class="mut">A log counts only when its date falls between the first day and the last day. Change the dates here to bring logs into the year.</p>
+    <label>Year label</label><input id="eyL" value="${esc(c.currentYear||'')}" placeholder="2026-2027">
+    <label>First day — logs on or after this date count</label><input id="eyS" type="date" value="${esc(c.yearStart||'')}">
+    <label>Last day — leave blank for an open year</label><input id="eyE" type="date" value="${esc(c.yearEnd||'')}">
+    <p class="mut" style="margin-top:10px">Clearing the last day reopens the year. This edit does <b>not</b> save a snapshot of the standings — use <b>End year</b> for that.</p>
+    <div class="row" style="margin-top:14px"><button onclick="A.saveYear()">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
+ saveYear:guard(async()=>{
+  const id=$('#eyL').value.trim(),st=$('#eyS').value,en=$('#eyE').value,c=S.cfg;
+  if(!/^\d{4}-\d{4}$/.test(id))return toast('Write the year like 2026-2027');
+  if(!st)return toast('Set the first day');
+  if(en&&en<st)return toast('The last day must be after the first day');
+  if(id!==c.currentYear&&(c.pastYears||[]).some(y=>y.id===id))return toast('A past year already uses that label');
+  const patch={currentYear:id,yearStart:st,yearEnd:en||''};
+  const oldId=c.currentYear;
+  if(oldId&&oldId!==id&&(c.pastYears||[]).some(y=>y.id===oldId)){
+    patch.pastYears=(c.pastYears||[]).map(y=>y.id===oldId?{...y,id,start:st,end:en||''}:y);
+  }
+  const b=writeBatch(db);
+  b.set(doc(db,'config','program'),patch,{merge:true});
+  if(oldId&&oldId!==id){
+    const old=S.years.find(y=>y.id===oldId);
+    if(old){b.delete(doc(db,'years',oldId));b.set(doc(db,'years',id),{...old,id,label:yLabel(id)})}
+  }
+  await b.commit();A.close();toast('Year updated')
+ }),
  startYearModal(){const c=S.cfg;if(c.currentYear&&!c.yearEnd)return toast('End the current year first');
   const st=c.yearEnd?ndt(c.yearEnd):(c.yearStart||ymd(new Date())),hasT=c.currentYear&&(c.terms||[]).some(t=>t.end);
   open_(`<h2>Start a new year</h2><p class="mut">Points start again at 0. Households, pods and target types carry over. Past years stay saved and exportable.</p><label>Year</label><input id="yL" value="${nextLabel()}" placeholder="2027-2028"><label>First day</label><input id="yS2" type="date" value="${st}">${hasT?`<label class="row" style="color:var(--txt);font-size:14px"><input id="yT" type="checkbox" checked style="width:24px;min-height:24px"> Move term end dates forward one year</label>`:''}<div class="row" style="margin-top:14px"><button onclick="A.startYear()">Start year</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
@@ -675,7 +698,7 @@ document.addEventListener('pointerdown',e=>{const g=e.target.closest&&e.target.c
   const mv=ev=>{const y=ev.clientY;if(y<90)scrollBy(0,-14);else if(y>innerHeight-90)scrollBy(0,14);const nx=[...box.children].filter(c=>c!==el).find(c=>{const r=c.getBoundingClientRect();return y<r.top+r.height/2});box.insertBefore(el,nx||null)};
   const up=()=>{g.removeEventListener('pointermove',mv);g.removeEventListener('pointerup',up);g.removeEventListener('pointercancel',up);S.pb=[...box.children].map(c=>S.pb.find(b=>b.id===c.dataset.id));redrawBlk()};
   g.addEventListener('pointermove',mv);g.addEventListener('pointerup',up);g.addEventListener('pointercancel',up)});
-const ADM=['saveClock','saveTerms','saveBlocks','addBlk','delBlk','moveBlk','setBlk','previewBlocks','startYearModal','endYearModal','startYear','endYear','undoLast','exportYear','endPreview','addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','setTarget','setPod','delLog','userDel','savePod','delPod','addPod','toggleSlot','migrateContacts','addWindow','saveWindow','delWindow','setWindow','addRole','renameRole','roleDesc','delRole','setHolder'],STF=['approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
+const ADM=['saveClock','saveTerms','saveBlocks','addBlk','delBlk','moveBlk','setBlk','previewBlocks','startYearModal','endYearModal','startYear','endYear','editYearModal','saveYear','undoLast','exportYear','endPreview','addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','setTarget','setPod','delLog','userDel','savePod','delPod','addPod','toggleSlot','migrateContacts','addWindow','saveWindow','delWindow','setWindow','addRole','renameRole','roleDesc','delRole','setHolder'],STF=['approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
 ADM.forEach(k=>{const f=A[k];A[k]=(...a)=>S.role==='admin'?f(...a):null});
 STF.forEach(k=>{const f=A[k];A[k]=(...a)=>isStaff()?f(...a):null});
 window.S_=S;
