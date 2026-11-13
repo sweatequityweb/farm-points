@@ -45,6 +45,7 @@ nav button.on{color:var(--pri);box-shadow:inset 0 3px 0 var(--pri)}
 .center .card{width:100%;max-width:420px;text-align:left}
 .bar{height:8px;background:#e3ebe3;border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--pri)}
 @media(prefers-reduced-motion:no-preference){button{transition:filter .15s}button:active{filter:brightness(.9)}}
+.kpi{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:12px 0}.kpi div{background:var(--bg);border-radius:10px;padding:12px;font-size:13px;color:var(--mut)}.kpi b{display:block;font-size:22px;color:var(--txt)}@media(min-width:760px){.kpi{grid-template-columns:repeat(4,1fr)}}
 </style>
 </head>
 <body>
@@ -71,7 +72,7 @@ import {getAuth,onAuthStateChanged,signInWithPopup,GoogleAuthProvider,signInWith
 import {getFirestore,doc,collection,onSnapshot,setDoc,updateDoc,deleteDoc,addDoc,getDocs,query,where,writeBatch} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
-const DEF={targetStandard:120,targetAdjusted:90,pointsPerDay:8,onTrackStandard:75,onTrackAdjusted:60,directory:{},clockOpen:'04:00',clockClose:'19:00',maxShiftHours:8,slidesUrl:'',yearStart:'',terms:[{name:'Term 1',end:'',pct:25},{name:'Term 2',end:'',pct:50},{name:'Term 3',end:'',pct:75},{name:'Term 4',end:'',pct:100}]};
+const DEF={targetStandard:120,targetAdjusted:90,pointsPerDay:8,onTrackStandard:75,onTrackAdjusted:60,directory:{},currentYear:'',yearEnd:'',pastYears:[],clockOpen:'04:00',clockClose:'19:00',maxShiftHours:8,slidesUrl:'',yearStart:'',terms:[{name:'Term 1',end:'',pct:25},{name:'Term 2',end:'',pct:50},{name:'Term 3',end:'',pct:75},{name:'Term 4',end:'',pct:100}]};
 const S={user:null,role:null,profile:undefined,hh:{},att:[],users:[],cfg:{...DEF},tab:'approvals',unsubs:[],timer:null,showStaff:false,ptab:'home',podHh:{},podAtt:[],_pod:null};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -85,11 +86,15 @@ const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clea
 const guard=fn=>async(...a)=>{try{return await fn(...a)}catch(e){console.error(e);toast('Error: '+(e.code||e.message))}};
 
 /* ---------- derived data ---------- */
-const pts=id=>S.att.filter(a=>a.hhId===id&&a.status==='approved').reduce((s,a)=>s+(a.points||0),0);
+const yLabel=id=>String(id||'').replace('-','\u2013');
+const inRange=(d,a,b)=>(!a||d>=a)&&(!b||d<=b);
+const inYear=a=>inRange(a.date,S.cfg.yearStart,S.cfg.yearEnd);
+const yearOver=()=>!!S.cfg.yearEnd&&ymd(new Date())>S.cfg.yearEnd;
+const pts=id=>S.att.filter(a=>a.hhId===id&&a.status==='approved'&&inYear(a)).reduce((s,a)=>s+(a.points||0),0);
 const target=h=>h?.targetType==='adjusted'?S.cfg.targetAdjusted:S.cfg.targetStandard;
 function standing(h,p){const t=target(h),mid=h?.targetType==='adjusted'?S.cfg.onTrackAdjusted:S.cfg.onTrackStandard,today=ymd(new Date()),T=(S.cfg.terms||[]).filter(x=>x.end).sort((a,b)=>a.end>b.end?1:-1);
   if(!S.cfg.yearStart||today<S.cfg.yearStart)return['Not started',''];
-  if(!T.length||today>T[T.length-1].end)return p>=t?['In Good Standing','approved']:p>=mid?['On Track','pending']:['Needs Support','voided'];
+  if(!T.length||S.cfg.yearEnd||today>T[T.length-1].end)return p>=t?['In Good Standing','approved']:p>=mid?['On Track','pending']:['Needs Support','voided'];
   const cur=T.find(x=>x.end>=today),thr=Math.round(t*cur.pct/100);
   return p>=thr?['Met '+cur.name+' pace','approved']:p>=thr*0.6?['Close to pace','pending']:['Behind pace','voided']}
 const hhName=id=>S.hh[id]?.name||S.cfg.directory?.[id]||id;
@@ -98,7 +103,7 @@ const hhName=id=>S.hh[id]?.name||S.cfg.directory?.[id]||id;
 function clearSubs(){S.unsubs.forEach(u=>u());S.unsubs=[];clearInterval(S.timer)}
 const sub=(ref,cb)=>S.unsubs.push(onSnapshot(ref,cb,e=>{console.error(e);toast('Permission or network error: '+e.code)}));
 onAuthStateChanged(auth,user=>{
-  clearSubs();S.user=user;S.profile=undefined;S.hh={};S.att=[];S.users=[];S.podHh={};S.podAtt=[];S._pod=null;S._hhSub=false;
+  clearSubs();S.user=user;S.profile=undefined;S.hh={};S.att=[];S.users=[];S.podHh={};S.podAtt=[];S._pod=null;S._hhSub=false;S.years=[];S.events=[];
   if(!user){S.role=null;return render()}
   const em=(user.email||'').toLowerCase();
   S.role=em===ADMIN_EMAIL?'admin':em===LIAISON_EMAIL?'liaison':'parent';
@@ -108,6 +113,7 @@ onAuthStateChanged(auth,user=>{
     sub(collection(db,'households'),s=>{S.hh={};s.forEach(d=>S.hh[d.id]=d.data());render()});
     sub(collection(db,'attendance'),s=>{S.att=s.docs.map(d=>({id:d.id,...d.data()}));render()});
     sub(collection(db,'users'),s=>{S.users=s.docs.map(d=>({id:d.id,...d.data()}));S.users.forEach(u=>sweep(u.id,u));render()});
+    if(S.role==='admin'){sub(collection(db,'years'),s=>{S.years=s.docs.map(d=>d.data());render()});sub(collection(db,'yearEvents'),s=>{S.events=s.docs.map(d=>({id:d.id,...d.data()}));render()})}
   }else{
     sub(doc(db,'users',user.uid),s=>{
       S.profile=s.exists()?s.data():null;sweep(user.uid,S.profile);
@@ -157,12 +163,12 @@ function logHtml(a,opts={}){
 function parentView(){if(S.ptab==='program')return programView();if(S.ptab==='pod')return podView();
   const id=S.profile.householdId,h=S.hh[id]||{},p=pts(id),t=target(h),[st,cls]=standing(h,p);
   const open=S.profile.activeClockIn,C=2*Math.PI*90,frac=Math.min(p/t,1);
-  const mine=[...S.att].sort((a,b)=>b.timeIn>a.timeIn?1:-1);
-  $('#app').innerHTML=`<div class="card hero"><div class="mut">${esc(h.barangay||'')}</div><h2 style="font-size:22px">${esc(h.name||id)} household</h2>
+  const mine=S.att.filter(inYear).sort((a,b)=>b.timeIn>a.timeIn?1:-1);
+  $('#app').innerHTML=`${yearBanner()}<div class="card hero"><div class="mut">${esc(h.barangay||'')}${S.cfg.currentYear?' \u00b7 '+yLabel(S.cfg.currentYear):''}</div><h2 style="font-size:22px">${esc(h.name||id)} household</h2>
   <svg class="ring" width="220" height="220" viewBox="0 0 220 220" role="img" aria-label="${p} of ${t} points"><circle cx="110" cy="110" r="90" fill="none" stroke="#e3ebe3" stroke-width="16"/><circle cx="110" cy="110" r="90" fill="none" stroke="#2e7d32" stroke-width="16" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-frac)}" transform="rotate(-90 110 110)"/><text x="110" y="112" text-anchor="middle" font-size="48" font-weight="700" fill="#1b5e20">${p}</text><text x="110" y="140" text-anchor="middle" font-size="15" fill="#5f6f61">of ${t} points</text></svg>
   <p class="mut std">Every farm day adds to your points. Thank you for showing up!</p></div>
   ${open?`<div class="card hero"><div class="mut">Working since ${fmtT(open)}</div><div id="tm" style="font-size:40px;font-weight:500">0:00:00</div><div class="mut" id="tmh"></div>${Date.now()-new Date(open)<3e5?`<button class="text" onclick="A.cancelIn()">Tapped by mistake? Cancel</button>`:''}</div>`:''}
-  <div class="card"><h2>History</h2>${mine.length?mine.map(a=>logHtml(a)).join(''):'<p class="mut">No logs yet. Tap Clock in when you start work.</p>'}</div>
+  <div class="card"><h2>History</h2>${mine.length?mine.map(a=>logHtml(a)).join(''):'<p class="mut">No logs yet. Tap Clock in when you start work.</p>'}</div>${pastHtml(id)}
   <div class="clock">${open?`<button class="red" onclick="A.clockOutModal()">CLOCK OUT</button>`:clockBtn()}</div>`;
   if(open){const tick=()=>{const s=Math.max(0,Math.floor((Date.now()-new Date(open))/1000));$('#tm').textContent=`${Math.floor(s/3600)}:${pad(Math.floor(s/60)%60)}:${pad(s%60)}`;$('#tmh').textContent=s>=7200?'2-hour minimum reached':'Counts for points after 2 hours'};tick();S.timer=setInterval(tick,1000)}
 }
@@ -171,7 +177,7 @@ function staffView(){
   const pendL=S.att.filter(a=>a.status==='pending').sort((a,b)=>a.timeIn>b.timeIn?1:-1);
   const pendU=S.users.filter(u=>u.status==='pending');
   const n=pendL.length+pendU.length,adm=S.role==='admin';
-  const tabs=[['approvals','Approvals',n],['households','Households'],...(adm?[['users','Users'],['settings','Settings']]:[])];
+  const tabs=[['approvals','Approvals',n],['households','Households'],...(adm?[['years','Years'],['users','Users'],['settings','Settings']]:[])];
   if(!tabs.some(t=>t[0]===S.tab))S.tab='approvals';
   $('#nav').innerHTML=tabs.map(([k,l,b])=>`<button class="${S.tab===k?'on':''}" onclick="S_.tab='${k}';A.r()">${l}${b?`<span class="badge">${b}</span>`:''}</button>`).join('');
   let h='';
@@ -183,12 +189,12 @@ function staffView(){
     const list=Object.keys(S.hh).sort();
     h+=`<div class="card"><h2>Households (${list.length})</h2>${list.length?list.map(id=>{const x=S.hh[id],p=pts(id),t=target(x),[st,c]=standing(x,p);
       return `<div class="log" onclick="A.hhModal('${id}')" style="cursor:pointer"><div class="row sp"><b>${id} · ${esc(x.name)}</b><span class="chip ${c}">${st}</span></div><div class="mut">${esc(x.barangay||'')} · ${p}/${t} pts${x.targetType==='adjusted'?' · adjusted':''}</div><div class="bar"><i style="width:${Math.min(100,p/t*100)}%"></i></div></div>`}).join(''):'<p class="mut">No households yet.'+(adm?' Import the Excel file in Settings.':'')+'</p>'}</div>`;
-  }else if(S.tab==='users'){
+  }else if(S.tab==='years'){h+=yearsView();}else if(S.tab==='users'){
     const ps=S.users.filter(u=>u.role==='parent');
     h+=`<div class="card"><h2>Household accounts</h2>${ps.length?ps.map(u=>userRow(u,true)).join(''):'<p class="mut">No sign-ins yet.</p>'}</div>`;
   }else{
     h+=`<div class="grid two"><div class="card"><h2>Targets</h2><label>Standard target (points)</label><input id="tS" type="number" value="${S.cfg.targetStandard}"><label>Adjusted target (points)</label><input id="tA" type="number" value="${S.cfg.targetAdjusted}"><label>Points per work day</label><input id="tP" type="number" value="${S.cfg.pointsPerDay}"><label>On Track from (standard / adjusted)</label><div class="row"><input id="oS" type="number" value="${S.cfg.onTrackStandard}" style="flex:1"><input id="oA" type="number" value="${S.cfg.onTrackAdjusted}" style="flex:1"></div><div style="margin-top:14px"><button onclick="A.saveCfg()">Save settings</button></div></div>
-    <div class="card"><h2>Clock-in and program</h2><label>Clock-in opens</label><input id="cO" type="time" value="${S.cfg.clockOpen}"><label>Clock-in closes</label><input id="cC" type="time" value="${S.cfg.clockClose}"><label>Auto-close open sessions after (hours)</label><input id="cM" type="number" value="${S.cfg.maxShiftHours}"><label>Program year starts</label><input id="yS" type="date" value="${S.cfg.yearStart||''}"><label>Terms: name, end date, % of target due by then</label><div id="termsBox">${termsHtml()}</div><p class="mut" style="margin:4px 0 8px">End dates are optional for now. Terms without an end date are saved but not used yet.</p><div class="row"><button class="ghost sm" onclick="A.addTerm()">+ Add term</button><button class="ghost sm" onclick="A.evenTerms()">Spread evenly</button></div><label>Google Slides link (shown to parents)</label><input id="sU" value="${esc(S.cfg.slidesUrl||'')}" placeholder="https://docs.google.com/presentation/d/..."><div style="margin-top:14px"><button onclick="A.saveCfg2()">Save</button></div></div>
+    <div class="card"><h2>Clock-in and program</h2><label>Clock-in opens</label><input id="cO" type="time" value="${S.cfg.clockOpen}"><label>Clock-in closes</label><input id="cC" type="time" value="${S.cfg.clockClose}"><label>Auto-close open sessions after (hours)</label><input id="cM" type="number" value="${S.cfg.maxShiftHours}"><p class="mut">Program year: <b>${esc(yLabel(S.cfg.currentYear)||'not started')}</b>. Start and end years under the Years tab.</p><label>Terms: name, end date, % of target due by then</label><div id="termsBox">${termsHtml()}</div><p class="mut" style="margin:4px 0 8px">End dates are optional for now. Terms without an end date are saved but not used yet.</p><div class="row"><button class="ghost sm" onclick="A.addTerm()">+ Add term</button><button class="ghost sm" onclick="A.evenTerms()">Spread evenly</button></div><label>Google Slides link (shown to parents)</label><input id="sU" value="${esc(S.cfg.slidesUrl||'')}" placeholder="https://docs.google.com/presentation/d/..."><div style="margin-top:14px"><button onclick="A.saveCfg2()">Save</button></div></div>
     <div class="card"><h2>Excel</h2><p class="mut">Import the scholar sheet "Sorted by Barangay". Existing households keep their target type.</p><input id="xf" type="file" accept=".xlsx,.xls"><div class="row" style="margin-top:12px"><button onclick="A.importXlsx()">Import</button><button class="ghost" onclick="A.exportXlsx()">Export report</button><button class="ghost" onclick="A.seedPods()">Load pods</button></div></div></div>`;
   }
   $('#app').innerHTML=h;
@@ -229,7 +235,7 @@ const A=window.A={
   claim:guard(async()=>{const id=$('#hhSel').value;if(!id)return toast('Pick your family name');
     await setDoc(doc(db,'users',S.user.uid),{email:S.user.email.toLowerCase(),role:'parent',householdId:id,status:'pending'})}),
   cancelClaim:guard(async()=>{await deleteDoc(doc(db,'users',S.user.uid))}),
-  clockIn:guard(async()=>{if(!inWin())return toast('Clock-in is closed right now');if(!confirm('Start your work day now?'))return;await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:new Date().toISOString()});toast('Clocked in')}),
+  clockIn:guard(async()=>{if(yearOver())return toast('The program year has ended');if(!inWin())return toast('Clock-in is closed right now');if(!confirm('Start your work day now?'))return;await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:new Date().toISOString()});toast('Clocked in')}),
   clockOutModal:()=>open_(`<h2>Clock out</h2><p class="mut">Worked ${hrs((Date.now()-new Date(S.profile.activeClockIn))/36e5)}</p><label>What did you work on?</label><input id="cn" placeholder="e.g. Weeding"><div class="row" style="margin-top:14px"><button class="red" onclick="A.clockOut()">Clock out and submit</button><button class="ghost" onclick="A.close()">Keep working</button></div>`),
   clockOut:guard(async()=>{
     const tin=new Date(S.profile.activeClockIn),tout=new Date(),dur=Math.round((tout-tin)/36e3)/100;
@@ -282,13 +288,13 @@ const A=window.A={
 };
 
 const inWin=()=>{const n=new Date(),m=n.getHours()*60+n.getMinutes(),f=t=>{const[h,k]=String(t).split(':');return +h*60+ +k};return m>=f(S.cfg.clockOpen)&&m<f(S.cfg.clockClose)};
-const clockBtn=()=>inWin()?`<button onclick="A.clockIn()">CLOCK IN</button>`:`<button disabled>CLOCK IN</button><p class="mut" style="text-align:center;margin:6px 0 0">Clock-in is open ${S.cfg.clockOpen} to ${S.cfg.clockClose}</p>`;
+const clockBtn=()=>yearOver()?`<button disabled>CLOCK IN</button><p class="mut" style="text-align:center;margin:6px 0 0">The ${yLabel(S.cfg.currentYear)} year has ended. The new year hasn't started yet.</p>`:inWin()?`<button onclick="A.clockIn()">CLOCK IN</button>`:`<button disabled>CLOCK IN</button><p class="mut" style="text-align:center;margin:6px 0 0">Clock-in is open ${S.cfg.clockOpen} to ${S.cfg.clockClose}</p>`;
 async function sweep(uid,u){if(!u?.activeClockIn||(Date.now()-new Date(u.activeClockIn))/36e5<S.cfg.maxShiftHours)return;
   const tin=new Date(u.activeClockIn),tout=new Date(+tin+S.cfg.maxShiftHours*36e5);
   try{await setDoc(doc(db,'attendance',`auto_${uid}_${tin.getTime()}`),{hhId:u.householdId,pod:S.hh[u.householdId]?.pod||'',date:ymd(tin),timeIn:tin.toISOString(),timeOut:tout.toISOString(),durationHours:+S.cfg.maxShiftHours,note:'Auto-closed: no clock-out',autoClosed:true,status:'pending',points:0,loggedBy:uid,approvedBy:''})}catch(e){}
   try{await updateDoc(doc(db,'users',uid),{activeClockIn:null})}catch(e){}}
 function termRows(id,h){const T=(S.cfg.terms||[]).filter(x=>x.end),t=target(h),today=ymd(new Date());
-  return T.map(x=>{const thr=Math.round(t*x.pct/100),got=S.att.filter(a=>a.hhId===id&&a.status==='approved'&&a.date<=x.end).reduce((q,a)=>q+(a.points||0),0),closed=x.end<today,ok=got>=thr;
+  return T.map(x=>{const thr=Math.round(t*x.pct/100),got=S.att.filter(a=>a.hhId===id&&a.status==='approved'&&a.date<=x.end&&inYear(a)).reduce((q,a)=>q+(a.points||0),0),closed=x.end<today,ok=got>=thr;
     return `<div class="row sp mut"><span>${esc(x.name)} (by ${fmtD(x.end)}): ${thr} pts</span><b style="color:${ok?'var(--ok)':closed?'var(--void)':'var(--pend)'}">${ok?'Met':closed?'Not met':'In progress'}</b></div>`}).join('')}
 const slideEmbed=u=>{const m=String(u||'').match(/presentation\/d\/(e\/)?([\w-]+)/);return m?`https://docs.google.com/presentation/d/${m[1]||''}${m[2]}/embed?start=false&loop=false`:''};
 function programView(){const u=slideEmbed(S.cfg.slidesUrl);$('#app').innerHTML=`<div class="card"><h2>About the program</h2>${u?`<div style="position:relative;padding-top:56.25%;border-radius:8px;overflow:hidden"><iframe src="${esc(u)}" style="position:absolute;inset:0;width:100%;height:100%;border:0" allowfullscreen title="Program presentation"></iframe></div><p><a href="${esc(S.cfg.slidesUrl)}" target="_blank" rel="noopener">Open in Google Slides</a></p>`:'<p class="mut">The presentation has not been added yet.</p>'}</div>`}
@@ -308,7 +314,7 @@ Object.assign(A,{
    if(terms.some(t=>t.end&&!(t.pct>0&&t.pct<=100)))return toast('A term with an end date needs a % from 1 to 100');
    if(dated)terms=terms.sort((a,b)=>a.end>b.end?1:-1);
    if(dated&&terms.length&&terms[terms.length-1].pct!==100&&!confirm('The last term is not 100% of the target. Save anyway?'))return;
-   await setDoc(doc(db,'config','program'),{clockOpen:$('#cO').value,clockClose:$('#cC').value,maxShiftHours:+$('#cM').value,yearStart:$('#yS').value,terms,slidesUrl:$('#sU').value.trim()},{merge:true});S.td=null;A.r();toast('Saved')}),
+   await setDoc(doc(db,'config','program'),{clockOpen:$('#cO').value,clockClose:$('#cC').value,maxShiftHours:+$('#cM').value,terms,slidesUrl:$('#sU').value.trim()},{merge:true});S.td=null;A.r();toast('Saved')}),
  editModal(id){const a=S.att.find(x=>x.id===id);open_(`<h2>Edit log · ${esc(hhName(a.hhId))}</h2><p class="mut">Correct this to the real time they arrived and left.</p><label>Time in</label><input id="eI" type="datetime-local" value="${loc(a.timeIn)}"><label>Time out</label><input id="eO" type="datetime-local" value="${loc(a.timeOut)}"><label>Note</label><input id="eN" value="${esc(a.note)}"><div class="row" style="margin-top:14px"><button onclick="A.saveEdit('${id}')">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
  saveEdit:guard(async id=>{const l=S.att.find(x=>x.id===id),i=new Date($('#eI').value),o=new Date($('#eO').value);if(isNaN(i)||isNaN(o)||o<=i)return toast('Time out must be after time in');
    const dur=Math.round((o-i)/36e3)/100;let p=0;if(l.status==='approved'){p=dur>=2?S.cfg.pointsPerDay:0;if(S.att.some(x=>x.id!==id&&x.hhId===l.hhId&&x.date===ymd(i)&&x.status==='approved'&&x.points>0))p=0}
@@ -326,7 +332,63 @@ Object.assign(A,{
  delTerm:i=>{S.td.splice(i,1);redrawTerms()},
  evenTerms:()=>{termsHtml();const n=S.td.length;S.td.forEach((t,i)=>t.pct=Math.round(100*(i+1)/n));redrawTerms()}
 });
-const ADM=['addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','seedPods','setTarget','setPod','delLog','userDel'],STF=['approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
+const ndt=d=>{const x=new Date(d+'T00:00');x.setDate(x.getDate()+1);return ymd(x)},plusYr=d=>{const[y,m,k]=d.split('-');return `${+y+1}-${m}-${k}`};
+const annual=(h,p)=>{const t=target(h),mid=h?.targetType==='adjusted'?S.cfg.onTrackAdjusted:S.cfg.onTrackStandard;return p>=t?'In Good Standing':p>=mid?'On Track':'Needs Support'};
+const r2=n=>Math.round(n*100)/100;
+function yearRows(a,b){return Object.keys(S.hh).sort().map(id=>{const h=S.hh[id],L=S.att.filter(x=>x.hhId===id&&inRange(x.date,a,b)),ap=L.filter(x=>x.status==='approved'),w=ap.filter(x=>x.kind!=='buyout'),p=ap.reduce((q,x)=>q+(x.points||0),0),by=ap.filter(x=>x.kind==='buyout');
+  return{id,name:h.name||'',barangay:h.barangay||'',pod:h.pod||'',targetType:h.targetType==='adjusted'?'adjusted':'standard',target:target(h),points:p,workDays:w.filter(x=>x.points>0).length,hours:r2(w.reduce((q,x)=>q+(x.durationHours||0),0)),buyouts:by.length,buyoutDays:by.reduce((q,x)=>q+(+x.days||0),0),pending:L.filter(x=>x.status==='pending').length,voided:L.filter(x=>x.status==='voided').length,standing:annual(h,p)}})}
+const summarize=rs=>{const sum=k=>rs.reduce((q,r)=>q+r[k],0),n=rs.length;return{households:n,active:rs.filter(r=>r.workDays>0).length,points:sum('points'),avg:n?r2(sum('points')/n):0,workDays:sum('workDays'),hours:r2(sum('hours')),buyouts:sum('buyouts'),pending:sum('pending'),good:rs.filter(r=>r.standing==='In Good Standing').length,onTrack:rs.filter(r=>r.standing==='On Track').length,needs:rs.filter(r=>r.standing==='Needs Support').length}};
+const kpi=sm=>`<div class="kpi"><div><b>${sm.points}</b>points earned</div><div><b>${sm.workDays}</b>work days</div><div><b>${sm.hours}</b>hours worked</div><div><b>${sm.active}/${sm.households}</b>households took part</div></div><div class="row" style="margin:10px 0"><span class="chip approved">${sm.good} In Good Standing</span><span class="chip pending">${sm.onTrack} On Track</span><span class="chip voided">${sm.needs} Needs Support</span></div>${sm.pending?`<p class="mut">\u26a0 ${sm.pending} log(s) are still pending and not counted.</p>`:''}`;
+const nextLabel=()=>{const m=/(\d{4})-(\d{4})/.exec(S.cfg.currentYear||'');const y=m?+m[2]:new Date().getFullYear();return `${y}-${y+1}`};
+const lastEvt=()=>[...S.events].filter(e=>!e.undone).sort((a,b)=>b.at-a.at)[0];
+const snap=()=>({currentYear:S.cfg.currentYear||'',yearStart:S.cfg.yearStart||'',yearEnd:S.cfg.yearEnd||'',pastYears:S.cfg.pastYears||[],terms:S.cfg.terms||[]});
+function yearBanner(){return yearOver()?`<div class="card"><b>The ${yLabel(S.cfg.currentYear)} year has ended.</b><p class="mut" style="margin:4px 0 0">Thank you for your work. The new year will start soon.</p></div>`:''}
+function pastHtml(id){const L=(S.cfg.pastYears||[]).filter(y=>y.id!==S.cfg.currentYear);if(!L.length)return'';
+  return `<div class="card"><h2>Previous years</h2>${L.slice().reverse().map(y=>`<div class="log row sp"><b>${yLabel(y.id)}</b><span>${S.att.filter(a=>a.hhId===id&&a.status==='approved'&&inRange(a.date,y.start,y.end)).reduce((q,a)=>q+(a.points||0),0)} points</span></div>`).join('')}</div>`}
+function yearsView(){const c=S.cfg,cur=c.currentYear,open=cur&&!c.yearEnd,ev=lastEvt();
+  const sm=summarize(yearRows(c.yearStart,c.yearEnd)),ys=[...S.years].sort((a,b)=>a.id<b.id?1:-1);
+  return `<div class="card"><div class="row sp"><div><div class="mut">Program year</div><h2 style="margin:0;font-size:26px">${cur?yLabel(cur):'Not started'}</h2><div class="mut">${cur?(open?'Open since ':'Ended ')+fmtD(open?c.yearStart:c.yearEnd):'Start your first year to begin counting.'}</div></div><span class="chip ${open?'approved':'pending'}">${open?'Open':cur?'Ended':'None'}</span></div>
+  ${cur?kpi(sm):''}<div class="row">${cur?`<button class="ghost" onclick="A.exportYear('${cur}')">Export Excel</button>`:''}${open?`<button class="red" onclick="A.endYearModal()">End year\u2026</button>`:`<button onclick="A.startYearModal()">Start ${cur?'next':'first'} year\u2026</button>`}</div></div>
+  ${ev?`<div class="card" style="border-left:4px solid var(--pend)"><div class="row sp"><div><b>Last change: ${ev.type==='end'?'Ended':'Started'} ${yLabel(ev.year)}</b><div class="mut">${new Date(ev.at).toLocaleString()} by ${esc(ev.by)}</div></div><button class="ghost" onclick="A.undoLast()">Undo</button></div></div>`:''}
+  <div class="card"><h2>All years</h2>${ys.length?ys.map(y=>`<div class="log row sp"><div><b>${yLabel(y.id)}</b><div class="mut">${fmtD(y.start)} \u2013 ${y.end?fmtD(y.end):'open'}${y.summary?' \u00b7 '+y.summary.points+' points':''}</div></div><button class="ghost sm" onclick="A.exportYear('${y.id}')">Export</button></div>`).join(''):'<p class="mut">No years saved yet.</p>'}</div>`}
+const endPrev=()=>{const c=S.cfg,e=$('#yE').value||ymd(new Date()),sm=summarize(yearRows(c.yearStart,e));$('#yP').innerHTML=kpi(sm)+(sm.pending?`<label class="row" style="color:var(--txt);font-size:14px"><input id="yK" type="checkbox" style="width:24px;min-height:24px"> I understand pending logs won't be counted</label>`:'')};
+Object.assign(A,{
+ exportXlsx:()=>A.exportYear(S.cfg.currentYear),
+ endPreview:endPrev,
+ endYearModal(){const c=S.cfg;if(!c.currentYear||c.yearEnd)return toast('There is no open year to end');
+  open_(`<h2>End ${yLabel(c.currentYear)}?</h2><p class="mut">This saves a summary and closes the year. No logs are deleted, and you can undo it from the Years tab.</p><label>Last day of the year</label><input id="yE" type="date" min="${c.yearStart}" value="${ymd(new Date())}" onchange="A.endPreview()"><div id="yP" style="margin-top:12px"></div><div class="row" style="margin-top:14px"><button class="red" onclick="A.endYear()">End year</button><button class="ghost" onclick="A.close()">Cancel</button></div>`);endPrev()},
+ endYear:guard(async()=>{const c=S.cfg,id=c.currentYear,end=$('#yE').value;if(!end||end<c.yearStart)return toast('Pick a valid last day');
+  const rows=yearRows(c.yearStart,end),sm=summarize(rows);if(sm.pending&&!$('#yK')?.checked)return toast('Tick the box to continue');
+  const b=writeBatch(db),by=S.user.email,past=[...(c.pastYears||[]).filter(y=>y.id!==id),{id,start:c.yearStart,end}];
+  b.set(doc(db,'years',id),{id,label:yLabel(id),start:c.yearStart,end,status:'closed',closedAt:Date.now(),closedBy:by,rows,summary:sm});
+  b.set(doc(db,'config','program'),{yearEnd:end,pastYears:past},{merge:true});
+  b.set(doc(collection(db,'yearEvents')),{type:'end',year:id,at:Date.now(),by,before:snap(),undone:false});
+  await b.commit();A.close();toast('Year ended. You can undo this.')}),
+ startYearModal(){const c=S.cfg;if(c.currentYear&&!c.yearEnd)return toast('End the current year first');
+  const st=c.yearEnd?ndt(c.yearEnd):(c.yearStart||ymd(new Date())),hasT=c.currentYear&&(c.terms||[]).some(t=>t.end);
+  open_(`<h2>Start a new year</h2><p class="mut">Points start again at 0. Households, pods and target types carry over. Past years stay saved and exportable.</p><label>Year</label><input id="yL" value="${nextLabel()}" placeholder="2027-2028"><label>First day</label><input id="yS2" type="date" value="${st}">${hasT?`<label class="row" style="color:var(--txt);font-size:14px"><input id="yT" type="checkbox" checked style="width:24px;min-height:24px"> Move term end dates forward one year</label>`:''}<div class="row" style="margin-top:14px"><button onclick="A.startYear()">Start year</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
+ startYear:guard(async()=>{const c=S.cfg,id=$('#yL').value.trim(),st=$('#yS2').value;
+  if(!/^\d{4}-\d{4}$/.test(id))return toast('Write the year like 2027-2028');if(!st||(c.yearEnd&&st<=c.yearEnd))return toast('The first day must be after the last year ended');
+  if(S.years.some(y=>y.id===id))return toast('That year already exists');
+  const terms=$('#yT')?.checked?(c.terms||[]).map(t=>({...t,end:t.end?plusYr(t.end):''})):(c.terms||[]),b=writeBatch(db),by=S.user.email;
+  b.set(doc(db,'years',id),{id,label:yLabel(id),start:st,status:'open',startedAt:Date.now(),startedBy:by});
+  b.set(doc(db,'config','program'),{currentYear:id,yearStart:st,yearEnd:'',terms},{merge:true});
+  b.set(doc(collection(db,'yearEvents')),{type:'start',year:id,at:Date.now(),by,before:snap(),undone:false});
+  await b.commit();S.td=null;A.close();toast('Year started. You can undo this.')}),
+ undoLast:guard(async()=>{const e=lastEvt();if(!e)return;if(!confirm(`Undo "${e.type==='end'?'Ended':'Started'} ${yLabel(e.year)}"? The year and points go back to how they were.`))return;
+  const b=writeBatch(db);b.set(doc(db,'config','program'),{currentYear:e.before.currentYear,yearStart:e.before.yearStart,yearEnd:e.before.yearEnd,pastYears:e.before.pastYears,terms:e.before.terms},{merge:true});
+  if(e.type==='start')b.delete(doc(db,'years',e.year));else b.set(doc(db,'years',e.year),{id:e.year,label:yLabel(e.year),start:e.before.yearStart,status:'open',reopenedAt:Date.now()});
+  b.update(doc(db,'yearEvents',e.id),{undone:true,undoneAt:Date.now(),undoneBy:S.user.email});await b.commit();S.td=null;toast('Undone')}),
+ exportYear:guard(id=>{const c=S.cfg,y=S.years.find(x=>x.id===id),cur=id&&id===c.currentYear,st=y?.start||(cur?c.yearStart:''),en=y?.end||(cur?c.yearEnd:'');
+  const closed=y&&y.status==='closed'&&y.rows,rows=closed?y.rows:yearRows(st,en),sm=closed?y.summary:summarize(rows);
+  const L=S.att.filter(a=>inRange(a.date,st,en)).sort((a,b)=>a.timeIn>b.timeIn?1:-1);
+  const info=[['Program year',id?yLabel(id):'All time'],['Status',closed?'Closed':'Open'],['First day',st||''],['Last day',en||'(open)'],['Exported',new Date().toLocaleString()],[],['Households',sm.households],['Households with at least one work day',sm.active],['Total points',sm.points],['Average points per household',sm.avg],['Work days approved',sm.workDays],['Hours worked',sm.hours],['Buy-out entries',sm.buyouts],['Logs still pending',sm.pending],[],['In Good Standing',sm.good],['On Track',sm.onTrack],['Needs Support',sm.needs]];
+  const wb=XLSX.utils.book_new(),s1=XLSX.utils.aoa_to_sheet(info);s1['!cols']=[{wch:38},{wch:22}];XLSX.utils.book_append_sheet(wb,s1,'Year Summary');
+  const s2=XLSX.utils.json_to_sheet(rows.map(r=>({'Household ID':r.id,Name:r.name,Barangay:r.barangay,Pod:r.pod,'Target type':r.targetType,Target:r.target,Points:r.points,'Work days':r.workDays,Hours:r.hours,'Buy-outs':r.buyouts,'Buy-out days':r.buyoutDays,Pending:r.pending,Voided:r.voided,Standing:r.standing})));s2['!cols']=Array(14).fill({wch:14});XLSX.utils.book_append_sheet(wb,s2,'Household Summary');
+  const s3=XLSX.utils.json_to_sheet(L.map(a=>({Type:a.kind||'work',Date:a.date,'Household ID':a.hhId,Pod:a.pod||'','Time In':fmtT(a.timeIn),'Time Out':fmtT(a.timeOut),Hours:a.durationHours||0,Note:a.note||'',Points:a.points||0,Status:a.status,'Approved by':a.approvedBy||''})));s3['!cols']=Array(11).fill({wch:14});XLSX.utils.book_append_sheet(wb,s3,'Attendance Logs');
+  XLSX.writeFile(wb,`ugnayan-gulayan-${id||'all'}.xlsx`)})
+});
+const ADM=['startYearModal','endYearModal','startYear','endYear','undoLast','exportYear','endPreview','addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','seedPods','setTarget','setPod','delLog','userDel'],STF=['approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
 ADM.forEach(k=>{const f=A[k];A[k]=(...a)=>S.role==='admin'?f(...a):null});
 STF.forEach(k=>{const f=A[k];A[k]=(...a)=>isStaff()?f(...a):null});
 window.S_=S;
