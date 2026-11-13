@@ -103,10 +103,15 @@ const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clea
 const guard=fn=>async(...a)=>{try{return await fn(...a)}catch(e){console.error(e);toast('Error: '+(e.code||e.message))}};
 
 /* ---------- derived data ---------- */
+/* Normalise a date that may be a string, Date, number, Firestore Timestamp
+   or full ISO string, so year-window comparisons never silently fail. */
+const toD=v=>{if(!v)return'';if(typeof v==='string')return v.slice(0,10);if(typeof v==='number')return ymd(new Date(v));
+  if(v.toDate)return ymd(v.toDate());if(v.seconds!==undefined)return ymd(new Date(v.seconds*1000));
+  if(v instanceof Date)return ymd(v);return String(v).slice(0,10)};
 const yLabel=id=>String(id||'').replace('-','\u2013');
-const inRange=(d,a,b)=>(!a||d>=a)&&(!b||d<=b);
+const inRange=(d,a,b)=>{d=toD(d);a=toD(a);b=toD(b);return(!a||d>=a)&&(!b||d<=b)};
 const inYear=a=>inRange(a.date,S.cfg.yearStart,S.cfg.yearEnd);
-const yearOver=()=>!!S.cfg.yearEnd&&ymd(new Date())>S.cfg.yearEnd;
+const yearOver=()=>!!S.cfg.yearEnd&&ymd(new Date())>toD(S.cfg.yearEnd);
 const pts=id=>S.att.filter(a=>a.hhId===id&&a.status==='approved'&&inYear(a)).reduce((s,a)=>s+(a.points||0),0);
 const target=h=>h?.targetType==='adjusted'?S.cfg.targetAdjusted:S.cfg.targetStandard;
 function standing(h,p){const t=target(h),mid=h?.targetType==='adjusted'?S.cfg.onTrackAdjusted:S.cfg.onTrackStandard,today=ymd(new Date()),T=(S.cfg.terms||[]).filter(x=>x.end).sort((a,b)=>a.end>b.end?1:-1);
@@ -142,7 +147,10 @@ const winChip=x=>{const w=winById(x.window);return w?`<span class="sch">${esc(wi
 const wSort=(a,b)=>DAYS.findIndex(x=>x[0]===a.day)-DAYS.findIndex(x=>x[0]===b.day)||String(a.start).localeCompare(String(b.start));
 const roleName=id=>((S.cfg.roles||[]).find(r=>r.id===id)||{}).name;
 const roleChips=hh=>Object.values(S.holders).filter(v=>v.hhId===hh&&roleName(v.roleId)).map(v=>`<span class="chip role">${esc(roleName(v.roleId))}</span>`).join('');
-const ctc=id=>S.contacts[id]||S.hh[id]||{};
+/* Contact lookup: prefer the contacts doc, fall back to legacy fields on the
+   household doc (that's where older imports put phone + email). */
+const ctc=id=>{const c=S.contacts[id]||{},h=S.hh[id]||{};return{masterEmail:c.masterEmail||h.masterEmail||'',contactNumber:c.contactNumber||h.contactNumber||'',shared:c.shared===true}};
+const ctcOf=(id)=>{const c=id===S.profile?.householdId?S.myContact||{}:{},h=S.hh[id]||{};return{masterEmail:c.masterEmail||h.masterEmail||'',contactNumber:c.contactNumber||h.contactNumber||'',shared:c.shared===true}};
 const incoming=()=>{const pod=String(S.hh[S.profile?.householdId]?.pod||'');return S.reqTo.filter(r=>r.status==='pending'&&String(r.pod)===pod&&(r.type==='contact'||(roleName(r.roleId)&&S.holders[r.assignId]?.hhId===r.fromHh)))};
 function parseIds(text){const raw=String(text||'').split(/[\s,;]+/).map(t=>t.trim()).filter(Boolean),ids=[],bad=[];
   const norm=t=>{const u=t.toUpperCase();if(S.hh[u])return u;const m=/^H?0*(\d+)$/.exec(u);if(m)for(const c of['H'+pad(m[1]),'H'+m[1]])if(S.hh[c])return c;return null};
@@ -166,7 +174,9 @@ onAuthStateChanged(auth,user=>{
   if(!user){S.role=null;return render()}
   const em=(user.email||'').toLowerCase();
   S.role=em===ADMIN_EMAIL?'admin':em===LIAISON_EMAIL?'liaison':'parent';
-  sub(doc(db,'config','program'),s=>{S.cfg={...DEF,...(s.data()||{})};S._cfgOk=true;const tt=S.cfg.terms||[];if(tt.length===3&&tt.every(t=>!t.end)&&tt.map(t=>t.pct).join()==='33,66,100')S.cfg.terms=DEF.terms;render()});
+  sub(doc(db,'config','program'),s=>{S.cfg={...DEF,...(s.data()||{})};
+    S.cfg.yearStart=toD(S.cfg.yearStart);S.cfg.yearEnd=toD(S.cfg.yearEnd);
+    S._cfgOk=true;const tt=S.cfg.terms||[];if(tt.length===3&&tt.every(t=>!t.end)&&tt.map(t=>t.pct).join()==='33,66,100')S.cfg.terms=DEF.terms;render()});
   if(isStaff()){
     S.profile={status:'active'};
     sub(collection(db,'households'),s=>{S.hh={};s.forEach(d=>S.hh[d.id]=d.data());render()});
@@ -200,8 +210,10 @@ onAuthStateChanged(auth,user=>{
 });
 
 /* ---------- rendering ---------- */
+let reModal=null;
 function render(){
   schedSync();
+  if(reModal&&$('#modal').classList.contains('show')){try{reModal()}catch(e){console.error(e)}}
   const app=$('#app'),nav=$('#nav'),hdr=$('#hdr');
   clearInterval(S.timer);
   if(!S.user){hdr.hidden=nav.hidden=true;return app.innerHTML=loginView()}
@@ -225,17 +237,20 @@ function claimView(){
 
 function logHtml(a,opts={}){
   const low=a.durationHours<2&&a.status==='pending';
+  const out=a.status==='approved'&&a.points>0&&!inYear(a);
   return `<div class="log"><div class="row sp"><b>${opts.hh?esc(hhName(a.hhId))+' · ':''}${fmtD(a.date)}</b><span class="chip ${a.status}">${a.status}${a.status==='approved'?' +'+a.points:''}</span></div>
   <div class="mut">${a.kind==='buyout'?'Buy-out · '+esc(a.item)+' · '+a.days+' day(s) equivalent':fmtT(a.timeIn)+' – '+fmtT(a.timeOut)+' · '+hrs(a.durationHours||0)+(a.note?' · '+esc(a.note):'')}</div>
-  ${low?'<span class="chip warn">Under 2 hours: earns 0 points</span>':''}${a.autoClosed?'<span class="chip warn">Auto-closed: times need checking</span>':''}${opts.actions||''}${isStaff()&&a.kind!=='buyout'?`<div><button class="text" onclick="A.editModal('${a.id}')">Edit times or note</button></div>`:''}</div>`}
+  ${low?'<span class="chip warn">Under 2 hours: earns 0 points</span>':''}${out?'<span class="chip warn">Outside the program year: not counted</span>':''}${a.autoClosed?'<span class="chip warn">Auto-closed: times need checking</span>':''}${opts.actions||''}${isStaff()&&a.kind!=='buyout'?`<div><button class="text" onclick="A.editModal('${a.id}')">Edit times or note</button></div>`:''}</div>`}
 
 function parentView(){if(S.ptab==='program')return programView();if(S.ptab==='pod')return podView();
   const id=S.profile.householdId,h=S.hh[id]||{},p=pts(id),t=target(h),[st,cls]=standing(h,p);
   const open=S.profile.activeClockIn,C=2*Math.PI*90,frac=Math.min(p/t,1);
   const mine=S.att.filter(inYear).sort((a,b)=>b.timeIn>a.timeIn?1:-1);
+  const outPts=S.att.filter(a=>a.status==='approved'&&!inYear(a)).reduce((s,a)=>s+(a.points||0),0);
   $('#app').innerHTML=`${yearBanner()}<div class="card hero"><div class="mut">${esc(h.barangay||'')}${S.cfg.currentYear?' \u00b7 '+yLabel(S.cfg.currentYear):''}</div><h2 style="font-size:22px">${esc(h.name||id)} household</h2>
   <svg class="ring" width="220" height="220" viewBox="0 0 220 220" role="img" aria-label="${p} of ${t} points"><circle cx="110" cy="110" r="90" fill="none" stroke="#e3ebe3" stroke-width="16"/><circle cx="110" cy="110" r="90" fill="none" stroke="#2e7d32" stroke-width="16" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-frac)}" transform="rotate(-90 110 110)"/><text x="110" y="112" text-anchor="middle" font-size="48" font-weight="700" fill="#1b5e20">${p}</text><text x="110" y="140" text-anchor="middle" font-size="15" fill="#5f6f61">of ${t} points</text></svg>
-  <p class="mut std">Every farm day adds to your points. Thank you for showing up!</p></div>
+  <p class="mut std">Every farm day adds to your points. Thank you for showing up!</p>
+  ${outPts?`<p class="mut" style="color:var(--pend);margin:6px 0 0">${outPts} approved point(s) fall outside the program year and are not counted.</p>`:''}</div>
   ${open?`<div class="card hero"><div class="mut">Working since ${fmtT(open)}</div><div id="tm" style="font-size:40px;font-weight:500">0:00:00</div><div class="mut" id="tmh"></div>${Date.now()-new Date(open)<3e5?`<button class="text" onclick="A.cancelIn()">Tapped by mistake? Cancel</button>`:''}</div>`:''}
   <div class="card"><h2>History</h2>${mine.length?mine.map(a=>logHtml(a)).join(''):'<p class="mut">No logs yet. Tap Clock in when you start work.</p>'}</div>${pastHtml(id)}
   <div class="clock">${open?`<button class="red" onclick="A.clockOutModal()">CLOCK OUT</button>`:clockBtn()}</div>`;
@@ -304,17 +319,18 @@ function userRow(u,all){
   <div class="row" style="margin-top:8px">${u.status==='pending'?`<button class="sm" onclick="A.userSet('${u.id}','active')">Approve</button><button class="sm ghost" onclick="A.userDel('${u.id}')">Reject</button>`:S.role==='admin'?`<button class="sm ghost" onclick="A.userDel('${u.id}')">Remove access</button>`:''}</div></div>`}
 
 /* ---------- modals ---------- */
-const open_=h=>{$('#sheet').innerHTML=h;$('#modal').classList.add('show')};
+const open_=(h,re)=>{$('#sheet').innerHTML=h;$('#modal').classList.add('show');reModal=re||null};
 function hhModal(id){
-  const x=S.hh[id],c_=ctc(id),logs=S.att.filter(a=>a.hhId===id).sort((a,b)=>b.timeIn>a.timeIn?1:-1),adm=S.role==='admin';
+  const x=S.hh[id]||{},c_=ctc(id),logs=S.att.filter(a=>a.hhId===id).sort((a,b)=>b.timeIn>a.timeIn?1:-1),adm=S.role==='admin';
+  const outPts=logs.filter(a=>a.status==='approved'&&!inYear(a)).reduce((s,a)=>s+(a.points||0),0);
   open_(`<div class="row sp"><h2 style="margin:0">${id} · ${esc(x.name)}</h2><button class="text" onclick="A.close()">Close</button></div>
-  <p class="mut">${esc(x.barangay||'')}<br>${esc(c_.masterEmail||'no email on record')} · ${esc(c_.contactNumber||'')}<br><b>${pts(id)}</b> / ${target(x)} points</p>${termRows(id,x)}
+  <p class="mut">${esc(x.barangay||'')}<br>${esc(c_.masterEmail||'no email on record')} · ${esc(c_.contactNumber||'')}<br><b>${pts(id)}</b> / ${target(x)} points</p>${outPts?`<p class="mut" style="color:var(--pend);margin:0 0 8px">${outPts} approved point(s) fall outside the program year and are not counted.</p>`:''}${termRows(id,x)}
   ${adm?`<label>Target type</label><select onchange="A.setTarget('${id}',this.value)"><option value="standard"${x.targetType!=='adjusted'?' selected':''}>Standard (${S.cfg.targetStandard})</option><option value="adjusted"${x.targetType==='adjusted'?' selected':''}>Adjusted (${S.cfg.targetAdjusted})</option></select>`:''}
   ${adm?`<label for="hp1">Pod</label><select id="hp1" onchange="A.setPod('${id}',this.value)"><option value="">No pod</option>${[...podNums(),...(x.pod&&!isNumPod(x.pod)?[x.pod]:[])].map(n=>`<option value="${esc(n)}"${String(x.pod||'')===n?' selected':''}>${esc(podLabel(n))}</option>`).join('')}</select>`:`<p class="mut">${esc(podLabel(x.pod))}</p>`}
   ${x.pod?(adm?`<label for="hw1">Window</label><select id="hw1" onchange="A.setWindow('${id}',this.value)"><option value="">No window</option>${(S.cfg.windows||[]).filter(w=>String(w.pod)===String(x.pod)).sort(wSort).map(w=>`<option value="${w.id}"${x.window===w.id?' selected':''}>${esc(winLabel(w))}</option>`).join('')}</select>`:`<p class="mut">${esc(winLabel(winById(x.window))||'No window')}</p>`):''}${roleChips(id)?`<div class="row" style="margin-top:10px">${roleChips(id)}</div>`:''}
   <label>Days available at the farm</label>${adm?`<p class="mut" style="margin:0 0 8px">Tap to turn a time on or off. It saves right away.</p>${slotGrid(id,x.availability)}`:`<div class="row" style="gap:6px">${availChips(x.availability)}</div>`}
   <div class="row" style="margin:12px 0"><button class="sm" onclick="A.manualModal('${id}')">+ Add log</button><button class="sm ghost" onclick="A.buyoutModal('${id}')">Buy-out</button></div>
-  ${logs.map(a=>logHtml(a,{actions:`<div class="row" style="margin-top:6px">${a.status!=='approved'?`<button class="sm" onclick="A.approve('${a.id}')">Approve</button>`:''}${a.status!=='voided'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button>`:''}${a.status!=='pending'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','pending')">Reopen</button>`:''}${adm?`<button class="sm ghost" onclick="A.delLog('${a.id}')">Delete</button>`:''}</div>`})).join('')||'<p class="mut">No logs yet.</p>'}`);
+  ${logs.map(a=>logHtml(a,{actions:`<div class="row" style="margin-top:6px">${a.status!=='approved'?`<button class="sm" onclick="A.approve('${a.id}')">Approve</button>`:''}${a.status!=='voided'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button>`:''}${a.status!=='pending'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','pending')">Reopen</button>`:''}${adm?`<button class="sm ghost" onclick="A.delLog('${a.id}')">Delete</button>`:''}</div>`})).join('')||'<p class="mut">No logs yet.</p>'}`,()=>hhModal(id));
 }
 function manualModal(pre=''){
   const now=new Date(),ids=Object.keys(S.hh).sort(),loc=d=>`${ymd(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -323,12 +339,13 @@ function manualModal(pre=''){
   <label>Time in</label><input id="mI" type="datetime-local" value="${loc(a)}"><label>Time out</label><input id="mO" type="datetime-local" value="${loc(b)}">
   <label>Note</label><input id="mN" placeholder="e.g. Weeding (forgot to clock out)">
   <label class="row" style="color:var(--txt);font-size:15px"><input id="mA" type="checkbox" checked style="width:24px;min-height:24px"> Approve right away</label>
+  <p class="mut" style="margin:8px 0 0">If the date falls outside the open program year, the points will not count toward the household total.</p>
   <div class="row" style="margin-top:14px"><button onclick="A.saveManual()">Save log</button><button class="ghost" onclick="A.close()">Cancel</button></div>`);
 }
 
 /* ---------- actions ---------- */
 const A=window.A={
-  r:render,close:()=>$('#modal').classList.remove('show'),
+  r:render,close:()=>{$('#modal').classList.remove('show');reModal=null},
   google:guard(()=>signInWithPopup(auth,new GoogleAuthProvider())),
   emailLogin:guard(async()=>{try{await signInWithEmailAndPassword(auth,$('#em').value.trim(),$('#pw').value)}catch(e){toast('Check your email and password')}}),
   logout:()=>{S._hhSub=false;signOut(auth)},
@@ -343,6 +360,7 @@ const A=window.A={
     await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:null});A.close();toast('Submitted for approval')}),
   approve:guard(async id=>{
     const l=S.att.find(x=>x.id===id),ppd=S.cfg.pointsPerDay;let p=l.durationHours>=2?ppd:0,why='This log is under 2 hours.';
+    if(!inYear(l)&&!confirm('This log is dated outside the program year, so it will not count toward the household total. Approve anyway?'))return;
     if(S.att.some(x=>x.id!==id&&x.hhId===l.hhId&&x.date===l.date&&x.status==='approved'&&x.points>0)){p=0;why='This household already earned points for this day (one work day counts once).'}
     if(p===0&&!confirm(why+' Approve with 0 points?'))return;
     await updateDoc(doc(db,'attendance',id),{status:'approved',points:p,approvedBy:S.user.email});toast(p?`Approved +${p}`:'Approved, 0 points')}),
@@ -356,6 +374,7 @@ const A=window.A={
     const hh=$('#mH').value,i=new Date($('#mI').value),o=new Date($('#mO').value);
     if(isNaN(i)||isNaN(o)||o<=i)return toast('Time out must be after time in');
     const dur=Math.round((o-i)/36e3)/100,ok=$('#mA').checked;let p=0;
+    if(!inRange(ymd(i),S.cfg.yearStart,S.cfg.yearEnd)&&!confirm('This date is outside the program year, so it will not count toward the household total. Save anyway?'))return;
     if(ok&&dur>=2&&!S.att.some(x=>x.hhId===hh&&x.date===ymd(i)&&x.status==='approved'&&x.points>0))p=S.cfg.pointsPerDay;
     await addDoc(collection(db,'attendance'),{hhId:hh,pod:S.hh[hh]?.pod||'',date:ymd(i),timeIn:i.toISOString(),timeOut:o.toISOString(),durationHours:dur,note:$('#mN').value.trim(),status:ok?'approved':'pending',points:p,loggedBy:S.user.uid,approvedBy:ok?S.user.email:''});
     A.close();toast(ok&&!p?'Saved with 0 points (under 2h or day already counted)':'Log saved')}),
@@ -373,9 +392,11 @@ const A=window.A={
     const b=writeBatch(db),dir={};
     for(const [id,rs] of Object.entries(g)){
       const name=String(rs[0]['Last Name']).trim();dir[id]=name;
-      const d={name,barangay:first(rs,'Barangay')},c={masterEmail:first(rs,'E-mail Address').toLowerCase(),contactNumber:phone(first(rs,'Contact Number'))};
-      if(!existing[id]){d.targetType='standard';d.createdAt=Date.now();c.shared=false}else if(existing[id].pod)c.pod=String(existing[id].pod);
-      b.set(doc(db,'households',id),d,{merge:true});b.set(doc(db,'contacts',id),c,{merge:true});
+      const d={name,barangay:first(rs,'Barangay')},em=first(rs,'E-mail Address').toLowerCase(),ph=phone(first(rs,'Contact Number')),c={};
+      if(em)c.masterEmail=em;if(ph)c.contactNumber=ph;
+      if(!existing[id]){d.targetType='standard';d.createdAt=Date.now()}else if(existing[id].pod)c.pod=String(existing[id].pod);
+      b.set(doc(db,'households',id),d,{merge:true});
+      if(Object.keys(c).length)b.set(doc(db,'contacts',id),c,{merge:true});
     }
     rows.forEach(r=>b.set(doc(db,'scholars',String(r['Scholar ID']).trim()),{householdId:String(r['Household ID']).trim(),firstName:String(r['First Name']).trim(),lastName:String(r['Last Name']).trim(),gradeLevel:String(r['Grade Level']).trim()}));
     b.set(doc(db,'config','program'),{directory:dir,...Object.fromEntries(Object.entries(DEF).filter(([k])=>k!=='directory'&&S.cfg[k]===DEF[k]).map(([k])=>[k,DEF[k]]))},{merge:true});
@@ -394,7 +415,7 @@ async function sweep(uid,u){if(!u?.activeClockIn||(Date.now()-new Date(u.activeC
   try{await setDoc(doc(db,'attendance',`auto_${uid}_${tin.getTime()}`),{hhId:u.householdId,pod:S.hh[u.householdId]?.pod||'',date:ymd(tin),timeIn:tin.toISOString(),timeOut:tout.toISOString(),durationHours:+S.cfg.maxShiftHours,note:'Auto-closed: no clock-out',autoClosed:true,status:'pending',points:0,loggedBy:uid,approvedBy:''})}catch(e){}
   try{await updateDoc(doc(db,'users',uid),{activeClockIn:null})}catch(e){}}
 function termRows(id,h){const T=(S.cfg.terms||[]).filter(x=>x.end),t=target(h),today=ymd(new Date());
-  return T.map(x=>{const thr=Math.round(t*x.pct/100),got=S.att.filter(a=>a.hhId===id&&a.status==='approved'&&a.date<=x.end&&inYear(a)).reduce((q,a)=>q+(a.points||0),0),closed=x.end<today,ok=got>=thr;
+  return T.map(x=>{const thr=Math.round(t*x.pct/100),got=S.att.filter(a=>a.hhId===id&&a.status==='approved'&&inRange(a.date,'',x.end)&&inYear(a)).reduce((q,a)=>q+(a.points||0),0),closed=x.end<today,ok=got>=thr;
     return `<div class="row sp mut"><span>${esc(x.name)} (by ${fmtD(x.end)}): ${thr} pts</span><b style="color:${ok?'var(--ok)':closed?'var(--void)':'var(--pend)'}">${ok?'Met':closed?'Not met':'In progress'}</b></div>`}).join('')}
 const slideEmbed=u=>{const m=String(u||'').match(/presentation\/d\/(e\/)?([\w-]+)/);return m?`https://docs.google.com/presentation/d/${m[1]||''}${m[2]}/embed?start=false&loop=false`:''};
 function programView(){const bl=S.cfg.programBlocks??(S.cfg.slidesUrl?[{type:'slides',title:'About the program',url:S.cfg.slidesUrl,md:''}]:[]);$('#app').innerHTML=programHtml(bl)}
@@ -404,11 +425,14 @@ function reqCard(r){const from=S.podHh[r.fromHh]?.name||r.fromHh;
 function podView(){const id=S.profile.householdId,me=S.hh[id]||{},pod=me.pod;
   if(!pod)return $('#app').innerHTML='<div class="card"><h2>My pod</h2><p class="mut">You have not been placed in a pod yet. The Farm Liaison will add you.</p></div>';
   const ids=Object.keys(S.podHh).sort(natCmp),inc=incoming(),R=S.cfg.roles||[],myW=winById(me.window),cSh=S.myContact?.shared===true,pSh=S.myPp?.shown===true;
+  const myC=S.myContact||{},ph=myC.contactNumber||me.contactNumber||'',em=myC.masterEmail||me.masterEmail||'';
   const wins=(S.cfg.windows||[]).filter(w=>String(w.pod)===String(pod)).sort(wSort),roleRows=R.map(r=>({r,k:r.id+'_'+pod,h:S.holders[r.id+'_'+pod]})).filter(x=>x.h);
   const nm=i=>esc(S.podHh[i]?.name||i);
   const incCard=inc.length?`<div class="card" style="border-left:4px solid var(--pend)"><h2>${inc.length} request${inc.length>1?'s':''} for you</h2>${inc.map(reqCard).join('')}</div>`:'';
   const privacy=`<div class="card"><h2>Your privacy</h2>
-   <div class="log"><div class="row sp"><b>Contact details</b><span class="chip ${cSh?'approved':'nopod'}">${cSh?'Shared with pod':'Not shared'}</span></div><p class="mut" style="margin:6px 0 10px">${!S.myContact?'No contact details are on file for your household yet. Ask the Admin to add them.':cSh?'Your phone number and email are visible to your podmates.':'Your contact details are not shared with your podmates. Share?'}</p>${S.myContact?`<button class="sm${cSh?' ghost':''}" onclick="A.shareContact(${!cSh})">${cSh?'Stop sharing':'Share with my pod'}</button>`:''}</div>
+   <div class="log"><div class="row sp"><b>Contact details</b><span class="chip ${cSh?'approved':'nopod'}">${cSh?'Shared with pod':'Not shared'}</span></div>
+   <p class="mut" style="margin:6px 0 10px">${ph||em?`Phone: ${esc(ph||'\u2014')}<br>Email: ${esc(em||'\u2014')}`:'No contact details on file yet. Add your phone or email so podmates can reach you.'}</p>
+   <div class="row"><button class="sm ghost" onclick="A.contactModal()">${ph||em?'Edit details':'Add my details'}</button>${ph||em?`<button class="sm${cSh?' ghost':''}" onclick="A.shareContact(${!cSh})">${cSh?'Stop sharing':'Share with my pod'}</button>`:''}</div></div>
    <div class="log"><div class="row sp"><b>Points</b><span class="chip ${pSh?'approved':'nopod'}">${pSh?'Shown to pod':'Hidden'}</span></div><p class="mut" style="margin:6px 0 10px">${pSh?'Your podmates can see your points.':'Your points are hidden from your podmates.'} Podmates cannot ask you to show them.</p><button class="sm${pSh?' ghost':''}" onclick="A.sharePoints(${!pSh})">${pSh?'Hide my points':'Show my points to my pod'}</button></div></div>`;
   const rolesCard=roleRows.length?`<div class="card"><h2>Roles in your pod</h2>${roleRows.map(({r,k,h})=>{const mine=h.hhId===id,offers=mine?S.reqFrom.filter(q=>q.type==='role'&&q.assignId===k):[];
     return `<div class="log"><div class="row sp"><div><b>${esc(r.name)}</b>${r.desc?`<div class="mut">${esc(r.desc)}</div>`:''}</div><span class="chip role">${nm(h.hhId)}${mine?' (you)':''}</span></div>${offers.map(q=>`<div class="row sp mut" style="margin-top:6px"><span>${q.status==='pending'?'Waiting for '+nm(q.toHh)+' to accept':nm(q.toHh)+' declined'}</span><button class="text" onclick="A.cancelReq('${q.id}')">${q.status==='pending'?'Cancel':'Dismiss'}</button></div>`).join('')}${mine?`<div style="margin-top:8px"><button class="sm ghost" onclick="A.passRoleModal('${k}')">Pass this role\u2026</button></div>`:''}</div>`}).join('')}</div>`:'';
@@ -582,7 +606,10 @@ Object.assign(A,{
 Object.assign(A,{
  migrateContacts:guard(async()=>{const ids=Object.keys(S.hh).filter(i=>S.hh[i].contactNumber!==undefined||S.hh[i].masterEmail!==undefined);if(!ids.length)return toast('Nothing to move');
    if(!confirm('Move the contact details of '+ids.length+' households to private storage? Nothing is lost. Podmates will only see them if the household agrees.'))return;
-   const ops=[];ids.forEach(i=>{const h=S.hh[i];ops.push(b=>b.set(doc(db,'contacts',i),{contactNumber:h.contactNumber||'',masterEmail:h.masterEmail||'',pod:h.pod?String(h.pod):'',shared:S.contacts[i]?.shared===true},{merge:true}));ops.push(b=>b.update(doc(db,'households',i),{contactNumber:deleteField(),masterEmail:deleteField()}))});
+   const ops=[];ids.forEach(i=>{const h=S.hh[i],ex=S.contacts[i]||{},c={pod:h.pod?String(h.pod):'',shared:ex.shared===true};
+     if(!ex.contactNumber&&h.contactNumber)c.contactNumber=h.contactNumber;
+     if(!ex.masterEmail&&h.masterEmail)c.masterEmail=h.masterEmail;
+     ops.push(b=>b.set(doc(db,'contacts',i),c,{merge:true}));ops.push(b=>b.update(doc(db,'households',i),{contactNumber:deleteField(),masterEmail:deleteField()}))});
    await runBatch(ops);toast('Contact details moved')}),
  addWindow:guard(async n=>{const w={id:uid(),pod:String(n),day:'Mon',start:'08:00',end:'11:00'};S.open.pods=true;S.open['pod'+n]=true;await setDoc(doc(db,'config','program'),{windows:[...(S.cfg.windows||[]),w]},{merge:true});toast('Window added. Set its day, time and households.')}),
  saveWindow:guard(async wid=>{document.activeElement?.blur?.();const w=(S.cfg.windows||[]).find(x=>x.id===wid),d=S.winDraft[wid];if(!w||!d)return;
@@ -605,9 +632,23 @@ Object.assign(A,{
    const ops=Object.entries(S.holders).filter(([k,v])=>v.roleId===id).map(([k])=>b=>b.delete(doc(db,'roleHolders',k)));ops.push(b=>b.set(doc(db,'config','program'),{roles:(S.cfg.roles||[]).filter(x=>x.id!==id)},{merge:true}));await runBatch(ops);toast('Role deleted')}),
  setHolder:guard(async(id,pod,hh)=>{const k=id+'_'+pod;if(!hh){await deleteDoc(doc(db,'roleHolders',k));toast('Role cleared')}else{await setDoc(doc(db,'roleHolders',k),{roleId:id,pod:String(pod),hhId:hh});toast(hh+' is now '+roleName(id)+' for Pod '+pod)}}),
  /* ----- parents ----- */
- shareContact:guard(async v=>{if(isStaff())return;const id=S.profile.householdId,pod=String(S.hh[id]?.pod||'');if(!S.myContact)return toast('No contact details on file yet');
-   const b=writeBatch(db),now=Date.now();b.update(doc(db,'contacts',id),{shared:v});
-   if(v)S.reqTo.filter(r=>r.type==='contact'&&r.status==='pending'&&String(r.pod)===pod).forEach(r=>b.update(doc(db,'requests',r.id),{status:'accepted',updatedAt:now}));
+ contactModal(){const id=S.profile.householdId,h=S.hh[id]||{},c=S.myContact||{},em=c.masterEmail||h.masterEmail||'',ph=c.contactNumber||h.contactNumber||'';
+   open_(`<h2>My contact details</h2><p class="mut">Only your podmates see these, and only if you share them.</p><label>Mobile number</label><input id="cN" type="tel" inputmode="tel" value="${esc(ph)}" placeholder="09XXXXXXXXX"><label>Email</label><input id="cE" type="email" inputmode="email" value="${esc(em)}" placeholder="name@example.com"><div class="row" style="margin-top:14px"><button onclick="A.saveMyContact()">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
+ saveMyContact:guard(async()=>{if(isStaff())return;const id=S.profile.householdId,pod=S.hh[id]?.pod;if(!pod)return toast('You are not in a pod yet');
+   const ph=$('#cN').value.trim().replace(/[\s-]/g,''),em=$('#cE').value.trim().toLowerCase();
+   if(ph&&!/^(\+?\d{7,15}|09\d{9})$/.test(ph))return toast('Check the mobile number');
+   if(em&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em))return toast('Check the email address');
+   if(!ph&&!em)return toast('Add a phone number or an email');
+   if(S.myContact)await updateDoc(doc(db,'contacts',id),{contactNumber:ph,masterEmail:em});
+   else await setDoc(doc(db,'contacts',id),{contactNumber:ph,masterEmail:em,pod:String(pod),shared:false});
+   A.close();toast('Contact details saved')}),
+ shareContact:guard(async v=>{if(isStaff())return;const id=S.profile.householdId,pod=S.hh[id]?.pod;if(!pod)return toast('You are not in a pod yet');
+   const h=S.hh[id]||{},c=S.myContact||{},em=c.masterEmail||h.masterEmail||'',ph=c.contactNumber||h.contactNumber||'';
+   if(!em&&!ph)return toast('Add your phone or email first');
+   const b=writeBatch(db),now=Date.now();
+   if(S.myContact)b.update(doc(db,'contacts',id),{shared:v});
+   else b.set(doc(db,'contacts',id),{contactNumber:ph,masterEmail:em,pod:String(pod),shared:v});
+   if(v)S.reqTo.filter(r=>r.type==='contact'&&r.status==='pending'&&String(r.pod)===String(pod)).forEach(r=>b.update(doc(db,'requests',r.id),{status:'accepted',updatedAt:now}));
    await b.commit();toast(v?'Your contact details are now shared with your pod':'You stopped sharing your contact details')}),
  sharePoints:guard(async v=>{if(isStaff())return;const id=S.profile.householdId,pod=S.hh[id]?.pod;if(!pod)return toast('You are not in a pod yet');const p=pts(id);
    if(S.myPp)await updateDoc(doc(db,'podpoints',id),{shown:v,points:p});else await setDoc(doc(db,'podpoints',id),{pod:String(pod),shown:v,points:p});toast(v?'Your points are now visible to your pod':'Your points are hidden')}),
@@ -619,10 +660,12 @@ Object.assign(A,{
    if(!ok){await updateDoc(doc(db,'requests',rid),{status:'declined',updatedAt:now});return toast('Declined. They can ask again.')}
    if(r.type==='contact')return A.shareContact(true);
    const h=S.holders[r.assignId];if(!h||h.hhId!==r.fromHh)return toast('That role has already moved');
-   const b=writeBatch(db);b.update(doc(db,'roleHolders',r.assignId),{hhId:id});b.delete(doc(db,'requests',rid));await b.commit();toast('You now hold '+roleName(r.roleId))}),
+   await updateDoc(doc(db,'requests',rid),{status:'accepted',updatedAt:now});
+   try{await updateDoc(doc(db,'roleHolders',r.assignId),{hhId:id})}catch(e){try{await updateDoc(doc(db,'requests',rid),{status:'pending',updatedAt:Date.now()})}catch(_){};throw e}
+   await deleteDoc(doc(db,'requests',rid));toast('You now hold '+roleName(r.roleId))}),
  passRoleModal(k){const id=S.profile.householdId,h=S.holders[k];if(!h||h.hhId!==id)return;const ids=Object.keys(S.podHh).filter(i=>i!==id).sort(natCmp);
    open_(`<h2>Pass ${esc(roleName(h.roleId)||'role')}</h2><p class="mut">Choose a podmate. They get a request, and the role moves only if they accept.</p><label for="rp">Podmate</label><select id="rp">${ids.map(i=>`<option value="${i}">${esc(S.podHh[i].name)} (${i})</option>`).join('')}</select><div class="row" style="margin-top:14px"><button onclick="A.sendRole('${k}')">Send request</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
- sendRole:guard(async k=>{const id=S.profile.householdId,h=S.holders[k],to=$('#rp')?.value;if(!h||h.hhId!==id||!to)return;const rid='role_'+k+'_'+to,ex=S.reqFrom.find(q=>q.id===rid),now=Date.now();
+ sendRole:guard(async k=>{const id=S.profile.householdId,h=S.holders[k],to=$('#rp')?.value;if(!h||h.hhId!==id||!to)return toast('Choose a podmate');const rid='role_'+k+'_'+to,ex=S.reqFrom.find(q=>q.id===rid),now=Date.now();
    if(ex&&ex.status==='pending')return toast('You already asked them');
    if(ex)await updateDoc(doc(db,'requests',rid),{status:'pending',updatedAt:now});else await setDoc(doc(db,'requests',rid),{type:'role',roleId:h.roleId,assignId:k,pod:String(h.pod),fromHh:id,toHh:to,status:'pending',createdAt:now,updatedAt:now});
    A.close();toast('Request sent')})
