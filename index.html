@@ -167,7 +167,7 @@ function hhSorted(){let ids=Object.keys(S.hh);const P={};ids.forEach(i=>P[i]=pts
 function clearSubs(){S.unsubs.forEach(u=>u());S.unsubs=[];clearInterval(S.timer)}
 const sub=(ref,cb)=>S.unsubs.push(onSnapshot(ref,cb,e=>{console.error(e);toast('Permission or network error: '+e.code)}));
 onAuthStateChanged(auth,user=>{
-  clearSubs();S.user=user;S.profile=undefined;S.hh={};S.att=[];S.users=[];S.podHh={};S.podAtt=[];S._pod=null;S._hhSub=false;S.contacts={};S.pp={};S.holders={};S.myContact=null;S.myPp=null;S.podContacts={};S.podPts={};S.reqFrom=[];S.reqTo=[];S._attOk=false;S._cfgOk=false;S.years=[];S.events=[];
+  clearSubs();S.user=user;S.profile=undefined;S.hh={};S.att=[];S.users=[];S.podHh={};S.podAtt=[];S._pod=null;S._pn0=null;S._hhSub=false;S.contacts={};S.pp={};S.holders={};S.myContact=null;S.myPp=null;S.podContacts={};S.podPts={};S.reqFrom=[];S.reqTo=[];S._attOk=false;S._cfgOk=false;S.years=[];S.events=[];
   if(!user){S.role=null;return render()}
   const em=(user.email||'').toLowerCase();
   S.role=em===ADMIN_EMAIL?'admin':em===LIAISON_EMAIL?'liaison':'parent';
@@ -189,7 +189,7 @@ onAuthStateChanged(auth,user=>{
       if(S.profile?.status==='active'&&S.profile.householdId&&!S._hhSub){
         S._hhSub=true;const id=S.profile.householdId;
         sub(doc(db,'households',id),x=>{S.hh={[id]:x.data()};const pd=x.data()?.pod;
-          if(pd&&S._pod!==pd){S._pod=pd;S.podHh={};S.podContacts={};S.podPts={};S.holders={};
+          if(pd&&S._pod!==pd){if(S._pn0!=null)S.unsubs.slice(S._pn0,S._pn0+4).forEach(u=>u());S._pn0=S.unsubs.length;S._pod=pd;S.podHh={};S.podContacts={};S.podPts={};S.holders={};
             sub(query(collection(db,'households'),where('pod','==',pd)),y=>{S.podHh={};y.forEach(d=>S.podHh[d.id]=d.data());render()});
             sub(query(collection(db,'contacts'),where('pod','==',pd),where('shared','==',true)),y=>{S.podContacts={};y.forEach(d=>S.podContacts[d.id]=d.data());render()});
             sub(query(collection(db,'podpoints'),where('pod','==',pd),where('shown','==',true)),y=>{S.podPts={};y.forEach(d=>S.podPts[d.id]=d.data());render()});
@@ -210,7 +210,7 @@ onAuthStateChanged(auth,user=>{
 let reModal=null;
 function render(){
   schedSync();
-  if(reModal&&$('#modal').classList.contains('show')){try{reModal()}catch(e){console.error(e)}}
+  if(reModal&&$('#modal').classList.contains('show')&&!(document.activeElement&&$('#sheet').contains(document.activeElement)&&/^(SELECT|INPUT|TEXTAREA)$/.test(document.activeElement.tagName))){try{reModal()}catch(e){console.error(e)}}
   const app=$('#app'),nav=$('#nav'),hdr=$('#hdr');
   clearInterval(S.timer);
   if(!S.user){hdr.hidden=nav.hidden=true;return app.innerHTML=loginView()}
@@ -326,7 +326,7 @@ function hhModal(id){
   ${x.pod?(adm?`<label for="hw1">Window</label><select id="hw1" onchange="A.setWindow('${id}',this.value)"><option value="">No window</option>${(S.cfg.windows||[]).filter(w=>String(w.pod)===String(x.pod)).sort(wSort).map(w=>`<option value="${w.id}"${x.window===w.id?' selected':''}>${esc(winLabel(w))}</option>`).join('')}</select>`:`<p class="mut">${esc(winLabel(winById(x.window))||'No window')}</p>`):''}${roleChips(id)?`<div class="row" style="margin-top:10px">${roleChips(id)}</div>`:''}
   <label>Days available at the farm</label>${adm?`<p class="mut" style="margin:0 0 8px">Tap to turn a time on or off. It saves right away.</p>${slotGrid(id,x.availability)}`:`<div class="row" style="gap:6px">${availChips(x.availability)}</div>`}
   <div class="row" style="margin:12px 0"><button class="sm" onclick="A.manualModal('${id}')">+ Add log</button><button class="sm ghost" onclick="A.buyoutModal('${id}')">Buy-out</button></div>
-  ${logs.map(a=>logHtml(a,{actions:`<div class="row" style="margin-top:6px">${a.status!=='approved'?`<button class="sm" onclick="A.approve('${a.id}')">Approve</button>`:''}${a.status!=='voided'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button>`:''}${a.status!=='pending'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','pending')">Reopen</button>`:''}${adm?`<button class="sm ghost" onclick="A.delLog('${a.id}')">Delete</button>`:''}</div>`})).join('')||'<p class="mut">No logs yet.</p>'`,()=>hhModal(id));
+  ${logs.map(a=>logHtml(a,{actions:`<div class="row" style="margin-top:6px">${a.status!=='approved'?`<button class="sm" onclick="A.approve('${a.id}')">Approve</button>`:''}${a.status!=='voided'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button>`:''}${a.status!=='pending'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','pending')">Reopen</button>`:''}${adm?`<button class="sm ghost" onclick="A.delLog('${a.id}')">Delete</button>`:''}</div>`})).join('')||'<p class="mut">No logs yet.</p>'}`,()=>hhModal(id));
 }
 function manualModal(pre=''){
   const now=new Date(),ids=Object.keys(S.hh).sort(),loc=d=>`${ymd(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -544,14 +544,16 @@ Object.assign(A,{
   if(id!==c.currentYear&&(c.pastYears||[]).some(y=>y.id===id))return toast('A past year already uses that label');
   const patch={currentYear:id,yearStart:st,yearEnd:en||''};
   const oldId=c.currentYear;
-  if(oldId&&oldId!==id&&(c.pastYears||[]).some(y=>y.id===oldId)){
+  if(oldId&&(c.pastYears||[]).some(y=>y.id===oldId)){
     patch.pastYears=(c.pastYears||[]).map(y=>y.id===oldId?{...y,id,start:st,end:en||''}:y);
   }
   const b=writeBatch(db);
   b.set(doc(db,'config','program'),patch,{merge:true});
   if(oldId&&oldId!==id){
     const old=S.years.find(y=>y.id===oldId);
-    if(old){b.delete(doc(db,'years',oldId));b.set(doc(db,'years',id),{...old,id,label:yLabel(id)})}
+    if(old){b.delete(doc(db,'years',oldId));b.set(doc(db,'years',id),{...old,id,label:yLabel(id),start:st,end:en||'',status:en?'closed':'open'})}
+  }else if(S.years.some(y=>y.id===id)){
+    b.update(doc(db,'years',id),{start:st,end:en||'',status:en?'closed':'open'});
   }
   await b.commit();A.close();toast('Year updated')
  }),
@@ -571,7 +573,7 @@ Object.assign(A,{
   if(e.type==='start')b.delete(doc(db,'years',e.year));else b.set(doc(db,'years',e.year),{id:e.year,label:yLabel(e.year),start:e.before.yearStart,status:'open',reopenedAt:Date.now()});
   b.update(doc(db,'yearEvents',e.id),{undone:true,undoneAt:Date.now(),undoneBy:S.user.email});await b.commit();S.td=null;toast('Undone')}),
  exportYear:guard(id=>{const c=S.cfg,y=S.years.find(x=>x.id===id),cur=id&&id===c.currentYear,st=y?.start||(cur?c.yearStart:''),en=y?.end||(cur?c.yearEnd:'');
-  const closed=y&&y.status==='closed'&&y.rows,rows=closed?y.rows:yearRows(st,en),sm=closed?y.summary:summarize(rows);
+  const closed=y&&y.status==='closed'&&y.rows&&!cur,rows=closed?y.rows:yearRows(st,en),sm=closed?y.summary:summarize(rows);
   const L=S.att.filter(a=>inRange(a.date,st,en)).sort((a,b)=>a.timeIn>b.timeIn?1:-1);
   const info=[['Program year',id?yLabel(id):'All time'],['Status',closed?'Closed':'Open'],['First day',st||''],['Last day',en||'(open)'],['Exported',new Date().toLocaleString()],[],['Households',sm.households],['Households with at least one work day',sm.active],['Total points',sm.points],['Average points per household',sm.avg],['Work days approved',sm.workDays],['Hours worked',sm.hours],['Buy-out entries',sm.buyouts],['Logs still pending',sm.pending],[],['In Good Standing',sm.good],['On Track',sm.onTrack],['Needs Support',sm.needs]];
   const wb=XLSX.utils.book_new(),s1=XLSX.utils.aoa_to_sheet(info);s1['!cols']=[{wch:38},{wch:22}];XLSX.utils.book_append_sheet(wb,s1,'Year Summary');
