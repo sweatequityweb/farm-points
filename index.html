@@ -87,8 +87,8 @@ import {getAuth,onAuthStateChanged,signInWithPopup,GoogleAuthProvider,signInWith
 import {getFirestore,doc,collection,onSnapshot,setDoc,updateDoc,deleteDoc,addDoc,getDocs,query,where,writeBatch,deleteField} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
-const DEF={targetStandard:120,targetAdjusted:90,pointsPerDay:8,onTrackStandard:75,onTrackAdjusted:60,directory:{},currentYear:'',yearEnd:'',pastYears:[],clockOpen:'04:00',clockClose:'19:00',maxShiftHours:8,slidesUrl:'',yearStart:'',terms:[{name:'Term 1',end:'',pct:25},{name:'Term 2',end:'',pct:50},{name:'Term 3',end:'',pct:75},{name:'Term 4',end:'',pct:100}]};
-const S={user:null,role:null,profile:undefined,hh:{},att:[],users:[],cfg:{...DEF},tab:'approvals',unsubs:[],timer:null,showStaff:false,open:{year:true},ptab:'home',podHh:{},podAtt:[],_pod:null,podDraft:{},winDraft:{},hsort:'id',hpod:'all',contacts:{},pp:{},holders:{},myContact:null,myPp:null,podContacts:{},podPts:{},reqFrom:[],reqTo:[]};
+const DEF={targetStandard:120,targetAdjusted:90,pointsPerDay:8,onTrackStandard:75,onTrackAdjusted:60,directory:{},currentYear:'',yearEnd:'',pastYears:[],clockOpen:'04:00',clockClose:'19:00',maxShiftHours:8,guestPoints:2,maxGuests:5,slidesUrl:'',yearStart:'',terms:[{name:'Term 1',end:'',pct:25},{name:'Term 2',end:'',pct:50},{name:'Term 3',end:'',pct:75},{name:'Term 4',end:'',pct:100}]};
+const S={user:null,role:null,profile:undefined,hh:{},att:[],users:[],cfg:{...DEF},tab:'approvals',unsubs:[],timer:null,showStaff:false,open:{year:true},ptab:'home',podHh:{},podAtt:[],_pod:null,podDraft:{},winDraft:{},hsort:'id',hpod:'all',contacts:{},pp:{},holders:{},myContact:null,myPp:null,podContacts:{},podPts:{},reqFrom:[],reqTo:[],harv:[],plant:[],fstats:null};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isStaff=()=>S.role==='admin'||S.role==='liaison';
@@ -167,7 +167,7 @@ function hhSorted(){let ids=Object.keys(S.hh);const P={};ids.forEach(i=>P[i]=pts
 function clearSubs(){S.unsubs.forEach(u=>u());S.unsubs=[];clearInterval(S.timer)}
 const sub=(ref,cb)=>S.unsubs.push(onSnapshot(ref,cb,e=>{console.error(e);toast('Permission or network error: '+e.code)}));
 onAuthStateChanged(auth,user=>{
-  clearSubs();S.user=user;S.profile=undefined;S.hh={};S.att=[];S.users=[];S.podHh={};S.podAtt=[];S._pod=null;S._pn0=null;S._hhSub=false;S.contacts={};S.pp={};S.holders={};S.myContact=null;S.myPp=null;S.podContacts={};S.podPts={};S.reqFrom=[];S.reqTo=[];S._attOk=false;S._cfgOk=false;S.years=[];S.events=[];
+  clearSubs();S.user=user;S.profile=undefined;S.hh={};S.att=[];S.users=[];S.podHh={};S.podAtt=[];S._pod=null;S._pn0=null;S._hhSub=false;S.contacts={};S.pp={};S.holders={};S.myContact=null;S.myPp=null;S.podContacts={};S.podPts={};S.reqFrom=[];S.reqTo=[];S._attOk=false;S._cfgOk=false;S.years=[];S.events=[];S.harv=[];S.plant=[];S.fstats=null;
   if(!user){S.role=null;return render()}
   const em=(user.email||'').toLowerCase();
   S.role=em===ADMIN_EMAIL?'admin':em===LIAISON_EMAIL?'liaison':'parent';
@@ -181,6 +181,8 @@ onAuthStateChanged(auth,user=>{
     sub(collection(db,'contacts'),s=>{S.contacts={};s.forEach(d=>S.contacts[d.id]=d.data());render()});
     sub(collection(db,'podpoints'),s=>{S.pp={};s.forEach(d=>S.pp[d.id]=d.data());render()});
     sub(collection(db,'roleHolders'),s=>{S.holders={};s.forEach(d=>S.holders[d.id]=d.data());render()});
+    sub(collection(db,'harvests'),s=>{S.harv=s.docs.map(d=>({id:d.id,...d.data()}));if(S._pushPending){S._pushPending=false;pushStats()}render()});
+    sub(collection(db,'plantings'),s=>{S.plant=s.docs.map(d=>({id:d.id,...d.data()}));render()});
     sub(collection(db,'users'),s=>{S.users=s.docs.map(d=>({id:d.id,...d.data()}));S.users.forEach(u=>sweep(u.id,u));render()});
     if(S.role==='admin'){sub(collection(db,'years'),s=>{S.years=s.docs.map(d=>d.data());render()});sub(collection(db,'yearEvents'),s=>{S.events=s.docs.map(d=>({id:d.id,...d.data()}));render()})}
   }else{
@@ -197,6 +199,8 @@ onAuthStateChanged(auth,user=>{
           render()});
         sub(doc(db,'contacts',id),x=>{S.myContact=x.exists()?x.data():null;render()});
         sub(doc(db,'podpoints',id),x=>{S.myPp=x.exists()?x.data():null;render()});
+        sub(query(collection(db,'plantings'),where('hhId','==',id)),x=>{S.plant=x.docs.map(d=>({id:d.id,...d.data()}));render()});
+        sub(doc(db,'farmstats','summary'),x=>{S.fstats=x.exists()?x.data():null;render()});
         sub(query(collection(db,'requests'),where('fromHh','==',id)),x=>{S.reqFrom=x.docs.map(d=>({id:d.id,...d.data()}));render()});
         sub(query(collection(db,'requests'),where('toHh','==',id)),x=>{S.reqTo=x.docs.map(d=>({id:d.id,...d.data()}));render()});
         sub(query(collection(db,'attendance'),where('hhId','==',id)),x=>{S.att=x.docs.map(d=>({id:d.id,...d.data()}));S._attOk=true;render()});
@@ -237,7 +241,7 @@ function logHtml(a,opts={}){
   const out=a.status==='approved'&&a.points>0&&!inYear(a);
   return `<div class="log"><div class="row sp"><b>${opts.hh?esc(hhName(a.hhId))+' · ':''}${fmtD(a.date)}</b><span class="chip ${a.status}">${a.status}${a.status==='approved'?' +'+a.points:''}</span></div>
   <div class="mut">${a.kind==='buyout'?'Buy-out · '+esc(a.item)+' · '+a.days+' day(s) equivalent':fmtT(a.timeIn)+' – '+fmtT(a.timeOut)+' · '+hrs(a.durationHours||0)+(a.note?' · '+esc(a.note):'')}</div>
-  ${low?'<span class="chip warn">Under 2 hours: earns 0 points</span>':''}${out?'<span class="chip warn">Outside the program year: not counted</span>':''}${a.autoClosed?'<span class="chip warn">Auto-closed: times need checking</span>':''}${opts.actions||''}${isStaff()&&a.kind!=='buyout'?`<div><button class="text" onclick="A.editModal('${a.id}')">Edit times or note</button></div>`:''}</div>`}
+  ${low?'<span class="chip warn">Under 2 hours: earns 0 points</span>':''}${out?'<span class="chip warn">Outside the program year: not counted</span>':''}${a.autoClosed?'<span class="chip warn">Auto-closed: times need checking</span>':''}${a.guests>0?`<span class="chip pod">+${a.guests} guest${a.guests>1?'s':''}${a.guestNames?': '+esc(a.guestNames):''}</span>`:''}${opts.actions||''}${isStaff()&&a.kind!=='buyout'?`<div><button class="text" onclick="A.editModal('${a.id}')">Edit times or note</button></div>`:''}</div>`}
 
 function parentView(){if(S.ptab==='program')return programView();if(S.ptab==='pod')return podView();
   const id=S.profile.householdId,h=S.hh[id]||{},p=pts(id),t=target(h),[st,cls]=standing(h,p);
@@ -249,7 +253,7 @@ function parentView(){if(S.ptab==='program')return programView();if(S.ptab==='po
   <p class="mut std">Every farm day adds to your points. Thank you for showing up!</p>
   ${outPts?`<p class="mut" style="color:var(--pend);margin:6px 0 0">${outPts} approved point(s) fall outside the program year and are not counted.</p>`:''}</div>
   ${open?`<div class="card hero"><div class="mut">Working since ${fmtT(open)}</div><div id="tm" style="font-size:40px;font-weight:500">0:00:00</div><div class="mut" id="tmh"></div>${Date.now()-new Date(open)<3e5?`<button class="text" onclick="A.cancelIn()">Tapped by mistake? Cancel</button>`:''}<div style="margin-top:10px"><button class="red" style="width:100%;min-height:64px;font-size:20px;border-radius:32px" onclick="A.clockOutModal()">CLOCK OUT</button></div></div>`:`<div class="card" style="text-align:center">${clockBtn()}</div>`}
-  <div class="card"><h2>History</h2>${mine.length?mine.map(a=>logHtml(a)).join(''):'<p class="mut">No logs yet. Tap Clock in when you start work.</p>'}</div>${pastHtml(id)}`;
+  ${farmCard()}${plantCard(id)}<div class="card"><h2>History</h2>${mine.length?mine.map(a=>logHtml(a)).join(''):'<p class="mut">No logs yet. Tap Clock in when you start work.</p>'}</div>${pastHtml(id)}`;
   if(open){const tick=()=>{const s=Math.max(0,Math.floor((Date.now()-new Date(open))/1000));$('#tm').textContent=`${Math.floor(s/3600)}:${pad(Math.floor(s/60)%60)}:${pad(s%60)}`;$('#tmh').textContent=s>=7200?'2-hour minimum reached':'Counts for points after 2 hours'};tick();S.timer=setInterval(tick,1000)}
 }
 
@@ -258,7 +262,7 @@ function staffView(){
   const pendL=S.att.filter(a=>a.status==='pending').sort((a,b)=>a.timeIn>b.timeIn?1:-1);
   const pendU=S.users.filter(u=>u.status==='pending');
   const n=pendL.length+pendU.length,adm=S.role==='admin';
-  const tabs=[['approvals','Approvals',n],['households','Households'],...(adm?[['users','Users'],['settings','Settings']]:[])];
+  const tabs=[['approvals','Approvals',n],['households','Households'],['farm','Farm'],...(adm?[['users','Users'],['settings','Settings']]:[])];
   if(!tabs.some(t=>t[0]===S.tab))S.tab='approvals';
   $('#nav').innerHTML=tabs.map(([k,l,b])=>`<button class="${S.tab===k?'on':''}" onclick="S_.tab='${k}';A.r()">${l}${b?`<span class="badge">${b}</span>`:''}</button>`).join('');
   let h='';
@@ -274,6 +278,7 @@ function staffView(){
     <div class="row" style="flex-wrap:nowrap;align-items:flex-end;margin-bottom:6px"><div class="grow" style="min-width:0"><label for="hs" style="margin-top:0">Sort by</label><select id="hs" onchange="this.blur();S_.hsort=this.value;A.r()">${Object.entries(SORTS).map(([k,l])=>`<option value="${k}"${hs===k?' selected':''}>${l}</option>`).join('')}</select></div><div class="grow" style="min-width:0"><label for="hp" style="margin-top:0">Show</label><select id="hp" onchange="this.blur();S_.hpod=this.value;A.r()">${popt.map(([k,l])=>`<option value="${esc(k)}"${hp===k?' selected':''}>${esc(l)}</option>`).join('')}</select></div></div>
     ${list.length?list.map(id=>{const x=S.hh[id],p=P[id],t=target(x),[st,c]=standing(x,p);
       return `<div class="log" onclick="A.hhModal('${id}')" style="cursor:pointer"><div class="row sp"><b>${id} \u00b7 ${esc(x.name)}</b><span class="chip ${c}">${st}</span></div><div class="mut">${esc(x.barangay||'')} \u00b7 ${p}/${t} pts${x.targetType==='adjusted'?' \u00b7 adjusted':''}</div><div class="row" style="gap:6px;margin:4px 0 2px">${podChip(x.pod)}${winChip(x)}${roleChips(id)}</div><div class="mut" style="margin-bottom:6px">${availText(x.availability)}</div><div class="bar"><i style="width:${Math.min(100,p/t*100)}%"></i></div></div>`}).join(''):(total?'<p class="mut">No households match this filter.</p>':'<p class="mut">No households yet.'+(adm?' Import the Excel file in Settings.':'')+'</p>')}</div>`;
+  }else if(S.tab==='farm'){h+=farmView();
   }else if(S.tab==='users'){
     const ps=S.users.filter(u=>u.role==='parent');
     h+=`<div class="card"><h2>Household accounts</h2>${ps.length?ps.map(u=>userRow(u,true)).join(''):'<p class="mut">No sign-ins yet.</p>'}</div>`;
@@ -325,7 +330,7 @@ function hhModal(id){
   ${adm?`<label for="hp1">Pod</label><select id="hp1" onchange="A.setPod('${id}',this.value)"><option value="">No pod</option>${[...podNums(),...(x.pod&&!isNumPod(x.pod)?[x.pod]:[])].map(n=>`<option value="${esc(n)}"${String(x.pod||'')===n?' selected':''}>${esc(podLabel(n))}</option>`).join('')}</select>`:`<p class="mut">${esc(podLabel(x.pod))}</p>`}
   ${x.pod?(adm?`<label for="hw1">Window</label><select id="hw1" onchange="A.setWindow('${id}',this.value)"><option value="">No window</option>${(S.cfg.windows||[]).filter(w=>String(w.pod)===String(x.pod)).sort(wSort).map(w=>`<option value="${w.id}"${x.window===w.id?' selected':''}>${esc(winLabel(w))}</option>`).join('')}</select>`:`<p class="mut">${esc(winLabel(winById(x.window))||'No window')}</p>`):''}${roleChips(id)?`<div class="row" style="margin-top:10px">${roleChips(id)}</div>`:''}
   <label>Days available at the farm</label>${adm?`<p class="mut" style="margin:0 0 8px">Tap to turn a time on or off. It saves right away.</p>${slotGrid(id,x.availability)}`:`<div class="row" style="gap:6px">${availChips(x.availability)}</div>`}
-  <div class="row" style="margin:12px 0"><button class="sm" onclick="A.manualModal('${id}')">+ Add log</button><button class="sm ghost" onclick="A.buyoutModal('${id}')">Buy-out</button></div>
+  <div class="row" style="margin:12px 0"><button class="sm" onclick="A.manualModal('${id}')">+ Add log</button><button class="sm ghost" onclick="A.buyoutModal('${id}')">Buy-out</button><button class="sm ghost" onclick="A.plantModal('${id}')">Plantings</button></div>
   ${logs.map(a=>logHtml(a,{actions:`<div class="row" style="margin-top:6px">${a.status!=='approved'?`<button class="sm" onclick="A.approve('${a.id}')">Approve</button>`:''}${a.status!=='voided'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button>`:''}${a.status!=='pending'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','pending')">Reopen</button>`:''}${adm?`<button class="sm ghost" onclick="A.delLog('${a.id}')">Delete</button>`:''}</div>`})).join('')||'<p class="mut">No logs yet.</p>'}`,()=>hhModal(id));
 }
 function manualModal(pre=''){
@@ -333,7 +338,7 @@ function manualModal(pre=''){
   const a=new Date(now);a.setHours(8,0,0,0);const b=new Date(now);b.setHours(10,0,0,0);
   open_(`<h2>Add a log</h2><label>Household</label><select id="mH">${ids.map(i=>`<option value="${i}"${i===pre?' selected':''}>${i} · ${esc(S.hh[i].name)}</option>`).join('')}</select>
   <label>Time in</label><input id="mI" type="datetime-local" value="${loc(a)}"><label>Time out</label><input id="mO" type="datetime-local" value="${loc(b)}">
-  <label>Note</label><input id="mN" placeholder="e.g. Weeding (forgot to clock out)">
+  <label>Note</label><input id="mN" placeholder="e.g. Weeding (forgot to clock out)"><label>Extra people who worked (+${S.cfg.guestPoints} each)</label><input id="mG" type="number" min="0" max="${S.cfg.maxGuests}" inputmode="numeric" value="0">
   <label class="row" style="color:var(--txt);font-size:15px"><input id="mA" type="checkbox" checked style="width:24px;min-height:24px"> Approve right away</label>
   <p class="mut" style="margin:8px 0 0">If the date falls outside the open program year, the points will not count toward the household total.</p>
   <div class="row" style="margin-top:14px"><button onclick="A.saveManual()">Save log</button><button class="ghost" onclick="A.close()">Cancel</button></div>`);
@@ -349,15 +354,16 @@ const A=window.A={
     await setDoc(doc(db,'users',S.user.uid),{email:S.user.email.toLowerCase(),role:'parent',householdId:id,status:'pending'})}),
   cancelClaim:guard(async()=>{await deleteDoc(doc(db,'users',S.user.uid))}),
   clockIn:guard(async()=>{if(yearOver())return toast('The program year has ended');if(!inWin())return toast('Clock-in is closed right now');if(!confirm('Start your work day now?'))return;await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:new Date().toISOString()});toast('Clocked in')}),
-  clockOutModal:()=>open_(`<h2>Clock out</h2><p class="mut">Worked ${hrs((Date.now()-new Date(S.profile.activeClockIn))/36e5)}</p><label>What did you work on?</label><input id="cn" placeholder="e.g. Weeding"><div class="row" style="margin-top:14px"><button class="red" onclick="A.clockOut()">Clock out and submit</button><button class="ghost" onclick="A.close()">Keep working</button></div>`),
+  clockOutModal:()=>open_(`<h2>Clock out</h2><p class="mut">Worked ${hrs((Date.now()-new Date(S.profile.activeClockIn))/36e5)}</p><label>What did you work on?</label><input id="cn" placeholder="e.g. Weeding"><label>Did anyone work with you today?</label><div class="row" style="flex-wrap:nowrap"><input id="cg" type="number" min="0" max="${S.cfg.maxGuests}" inputmode="numeric" value="0" style="width:90px;flex:none"><span class="mut">extra people (+${S.cfg.guestPoints} points each, up to ${S.cfg.maxGuests})</span></div><label>Who came with you? (names)</label><input id="cgn" placeholder="e.g. Ate Mila, Jun"><div class="row" style="margin-top:14px"><button class="red" onclick="A.clockOut()">Clock out and submit</button><button class="ghost" onclick="A.close()">Keep working</button></div>`),
   clockOut:guard(async()=>{
     const tin=new Date(S.profile.activeClockIn),tout=new Date(),dur=Math.round((tout-tin)/36e3)/100;
-    await addDoc(collection(db,'attendance'),{hhId:S.profile.householdId,pod:S.hh[S.profile.householdId]?.pod||'',date:ymd(tin),timeIn:tin.toISOString(),timeOut:tout.toISOString(),durationHours:dur,note:$('#cn').value.trim(),status:'pending',points:0,loggedBy:S.user.uid,approvedBy:''});
+    await addDoc(collection(db,'attendance'),{hhId:S.profile.householdId,pod:S.hh[S.profile.householdId]?.pod||'',date:ymd(tin),timeIn:tin.toISOString(),timeOut:tout.toISOString(),durationHours:dur,note:$('#cn').value.trim(),guests:Math.min(Math.max(parseInt($('#cg').value)||0,0),S.cfg.maxGuests),guestNames:($('#cgn').value||'').trim().slice(0,150),status:'pending',points:0,loggedBy:S.user.uid,approvedBy:''});
     await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:null});A.close();toast('Submitted for approval')}),
   approve:guard(async id=>{
     const l=S.att.find(x=>x.id===id),ppd=S.cfg.pointsPerDay;let p=l.durationHours>=2?ppd:0,why='This log is under 2 hours.';
     if(!inYear(l)&&!confirm('This log is dated outside the program year, so it will not count toward the household total. Approve anyway?'))return;
     if(S.att.some(x=>x.id!==id&&x.hhId===l.hhId&&x.date===l.date&&x.status==='approved'&&x.points>0)){p=0;why='This household already earned points for this day (one work day counts once).'}
+    if(p>0)p+=guestBonus(l);
     if(p===0&&!confirm(why+' Approve with 0 points?'))return;
     await updateDoc(doc(db,'attendance',id),{status:'approved',points:p,approvedBy:S.user.email});toast(p?`Approved +${p}`:'Approved, 0 points')}),
   setStatus:guard(async(id,s)=>{await updateDoc(doc(db,'attendance',id),{status:s,points:0,approvedBy:s==='pending'?'':S.user.email})}),
@@ -369,13 +375,13 @@ const A=window.A={
   saveManual:guard(async()=>{
     const hh=$('#mH').value,i=new Date($('#mI').value),o=new Date($('#mO').value);
     if(isNaN(i)||isNaN(o)||o<=i)return toast('Time out must be after time in');
-    const dur=Math.round((o-i)/36e3)/100,ok=$('#mA').checked;let p=0;
+    const dur=Math.round((o-i)/36e3)/100,ok=$('#mA').checked;let p=0;const g=Math.min(Math.max(+$('#mG').value||0,0),S.cfg.maxGuests);
     if(!inRange(ymd(i),S.cfg.yearStart,S.cfg.yearEnd)&&!confirm('This date is outside the program year, so it will not count toward the household total. Save anyway?'))return;
-    if(ok&&dur>=2&&!S.att.some(x=>x.hhId===hh&&x.date===ymd(i)&&x.status==='approved'&&x.points>0))p=S.cfg.pointsPerDay;
-    await addDoc(collection(db,'attendance'),{hhId:hh,pod:S.hh[hh]?.pod||'',date:ymd(i),timeIn:i.toISOString(),timeOut:o.toISOString(),durationHours:dur,note:$('#mN').value.trim(),status:ok?'approved':'pending',points:p,loggedBy:S.user.uid,approvedBy:ok?S.user.email:''});
+    if(ok&&dur>=2&&!S.att.some(x=>x.hhId===hh&&x.date===ymd(i)&&x.status==='approved'&&x.points>0))p=S.cfg.pointsPerDay+g*S.cfg.guestPoints;
+    await addDoc(collection(db,'attendance'),{hhId:hh,pod:S.hh[hh]?.pod||'',date:ymd(i),timeIn:i.toISOString(),timeOut:o.toISOString(),durationHours:dur,note:$('#mN').value.trim(),guests:g,status:ok?'approved':'pending',points:p,loggedBy:S.user.uid,approvedBy:ok?S.user.email:''});
     A.close();toast(ok&&!p?'Saved with 0 points (under 2h or day already counted)':'Log saved')}),
   saveCfg:guard(async()=>{const n=id=>+$(id).value;
-    await setDoc(doc(db,'config','program'),{targetStandard:n('#tS'),targetAdjusted:n('#tA'),pointsPerDay:n('#tP'),onTrackStandard:n('#oS'),onTrackAdjusted:n('#oA')},{merge:true});toast('Settings saved')}),
+    await setDoc(doc(db,'config','program'),{targetStandard:n('#tS'),targetAdjusted:n('#tA'),pointsPerDay:n('#tP'),guestPoints:n('#tG'),maxGuests:n('#tM'),onTrackStandard:n('#oS'),onTrackAdjusted:n('#oA')},{merge:true});toast('Settings saved')}),
   importXlsx:guard(async()=>{
     const f=$('#xf').files[0];if(!f)return toast('Choose the Excel file first');
     const wb=XLSX.read(await f.arrayBuffer()),ws=wb.Sheets['Sorted by Barangay']||wb.Sheets[wb.SheetNames[0]];
@@ -479,10 +485,11 @@ Object.assign(A,{
    if(dated)terms=terms.sort((a,b)=>a.end>b.end?1:-1);
    if(dated&&terms.length&&terms[terms.length-1].pct!==100&&!confirm('The last term is not 100% of the target. Save anyway?'))return;
    await setDoc(doc(db,'config','program'),{clockOpen:$('#cO').value,clockClose:$('#cC').value,maxShiftHours:+$('#cM').value,terms,slidesUrl:$('#sU').value.trim()},{merge:true});S.td=null;A.r();toast('Saved')}),
- editModal(id){const a=S.att.find(x=>x.id===id);open_(`<h2>Edit log · ${esc(hhName(a.hhId))}</h2><p class="mut">Correct this to the real time they arrived and left.</p><label>Time in</label><input id="eI" type="datetime-local" value="${loc(a.timeIn)}"><label>Time out</label><input id="eO" type="datetime-local" value="${loc(a.timeOut)}"><label>Note</label><input id="eN" value="${esc(a.note)}"><div class="row" style="margin-top:14px"><button onclick="A.saveEdit('${id}')">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
+ editModal(id){const a=S.att.find(x=>x.id===id);open_(`<h2>Edit log · ${esc(hhName(a.hhId))}</h2><p class="mut">Correct this to the real time they arrived and left.</p><label>Time in</label><input id="eI" type="datetime-local" value="${loc(a.timeIn)}"><label>Time out</label><input id="eO" type="datetime-local" value="${loc(a.timeOut)}"><label>Note</label><input id="eN" value="${esc(a.note)}"><label>Extra people who worked (+${S.cfg.guestPoints} each)</label><input id="eG" type="number" min="0" max="${S.cfg.maxGuests}" inputmode="numeric" value="${a.guests||0}"><div class="row" style="margin-top:14px"><button onclick="A.saveEdit('${id}')">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
  saveEdit:guard(async id=>{const l=S.att.find(x=>x.id===id),i=new Date($('#eI').value),o=new Date($('#eO').value);if(isNaN(i)||isNaN(o)||o<=i)return toast('Time out must be after time in');
    const dur=Math.round((o-i)/36e3)/100;let p=0;if(l.status==='approved'){p=dur>=2?S.cfg.pointsPerDay:0;if(S.att.some(x=>x.id!==id&&x.hhId===l.hhId&&x.date===ymd(i)&&x.status==='approved'&&x.points>0))p=0}
-   await updateDoc(doc(db,'attendance',id),{date:ymd(i),timeIn:i.toISOString(),timeOut:o.toISOString(),durationHours:dur,note:$('#eN').value.trim(),points:p,autoClosed:false,editedBy:S.user.email});A.close();toast('Log updated')}),
+   const g=Math.min(Math.max(+$('#eG').value||0,0),S.cfg.maxGuests);if(p>0)p+=g*S.cfg.guestPoints;
+   await updateDoc(doc(db,'attendance',id),{date:ymd(i),timeIn:i.toISOString(),timeOut:o.toISOString(),durationHours:dur,note:$('#eN').value.trim(),guests:g,points:p,autoClosed:false,editedBy:S.user.email});A.close();toast('Log updated')}),
  buyoutModal(pre=''){const ids=Object.keys(S.hh).sort();open_(`<h2>Record a buy-out</h2><p class="mut">For households who gave materials, skills or services instead of a farm day. It does not add points.</p><label>Household</label><select id="bH">${ids.map(i=>`<option value="${i}"${i===pre?' selected':''}>${i} · ${esc(S.hh[i].name)}</option>`).join('')}</select><label>Date</label><input id="bD" type="date" value="${ymd(new Date())}"><label>What was given or done</label><input id="bI" placeholder="e.g. 20 kg compost, harvest delivery"><label>Work days it covers</label><input id="bN" type="number" step="0.5" value="1"><div class="row" style="margin-top:14px"><button onclick="A.saveBuyout()">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
  saveBuyout:guard(async()=>{const hh=$('#bH').value,it=$('#bI').value.trim(),d=$('#bD').value;if(!it||!d)return toast('Add the date and what was given');const t=new Date(d+'T12:00').toISOString();
    await addDoc(collection(db,'attendance'),{hhId:hh,pod:S.hh[hh]?.pod||'',date:d,kind:'buyout',item:it,days:+$('#bN').value,timeIn:t,timeOut:t,durationHours:0,note:it,status:'approved',points:0,loggedBy:S.user.uid,approvedBy:S.user.email});A.close();toast('Buy-out recorded')})
@@ -500,7 +507,7 @@ const ndt=d=>{const x=new Date(d+'T00:00');x.setDate(x.getDate()+1);return ymd(x
 const annual=(h,p)=>{const t=target(h),mid=h?.targetType==='adjusted'?S.cfg.onTrackAdjusted:S.cfg.onTrackStandard;return p>=t?'In Good Standing':p>=mid?'On Track':'Needs Support'};
 const r2=n=>Math.round(n*100)/100;
 function yearRows(a,b){return Object.keys(S.hh).sort().map(id=>{const h=S.hh[id],L=S.att.filter(x=>x.hhId===id&&inRange(x.date,a,b)),ap=L.filter(x=>x.status==='approved'),w=ap.filter(x=>x.kind!=='buyout'),p=ap.reduce((q,x)=>q+(x.points||0),0),by=ap.filter(x=>x.kind==='buyout');
-  return{id,name:h.name||'',barangay:h.barangay||'',pod:h.pod||'',targetType:h.targetType==='adjusted'?'adjusted':'standard',target:target(h),points:p,workDays:w.filter(x=>x.points>0).length,hours:r2(w.reduce((q,x)=>q+(x.durationHours||0),0)),buyouts:by.length,buyoutDays:by.reduce((q,x)=>q+(+x.days||0),0),pending:L.filter(x=>x.status==='pending').length,voided:L.filter(x=>x.status==='voided').length,standing:annual(h,p)}})}
+  return{id,name:h.name||'',barangay:h.barangay||'',pod:h.pod||'',targetType:h.targetType==='adjusted'?'adjusted':'standard',target:target(h),points:p,workDays:w.filter(x=>x.points>0).length,hours:r2(w.reduce((q,x)=>q+(x.durationHours||0),0)),guests:w.reduce((q,x)=>q+(+x.guests||0),0),buyouts:by.length,buyoutDays:by.reduce((q,x)=>q+(+x.days||0),0),pending:L.filter(x=>x.status==='pending').length,voided:L.filter(x=>x.status==='voided').length,standing:annual(h,p)}})}
 const summarize=rs=>{const sum=k=>rs.reduce((q,r)=>q+r[k],0),n=rs.length;return{households:n,active:rs.filter(r=>r.workDays>0).length,points:sum('points'),avg:n?r2(sum('points')/n):0,workDays:sum('workDays'),hours:r2(sum('hours')),buyouts:sum('buyouts'),pending:sum('pending'),good:rs.filter(r=>r.standing==='In Good Standing').length,onTrack:rs.filter(r=>r.standing==='On Track').length,needs:rs.filter(r=>r.standing==='Needs Support').length}};
 const kpi=sm=>`<div class="kpi"><div><b>${sm.points}</b>points earned</div><div><b>${sm.workDays}</b>work days</div><div><b>${sm.hours}</b>hours worked</div><div><b>${sm.active}/${sm.households}</b>households took part</div></div><div class="row" style="margin:10px 0"><span class="chip approved">${sm.good} In Good Standing</span><span class="chip pending">${sm.onTrack} On Track</span><span class="chip voided">${sm.needs} Needs Support</span></div>${sm.pending?`<p class="mut">\u26a0 ${sm.pending} log(s) are still pending and not counted.</p>`:''}`;
 const nextLabel=()=>{const m=/(\d{4})-(\d{4})/.exec(S.cfg.currentYear||'');const y=m?+m[2]:new Date().getFullYear();return `${y}-${y+1}`};
@@ -577,8 +584,10 @@ Object.assign(A,{
   const L=S.att.filter(a=>inRange(a.date,st,en)).sort((a,b)=>a.timeIn>b.timeIn?1:-1);
   const info=[['Program year',id?yLabel(id):'All time'],['Status',closed?'Closed':'Open'],['First day',st||''],['Last day',en||'(open)'],['Exported',new Date().toLocaleString()],[],['Households',sm.households],['Households with at least one work day',sm.active],['Total points',sm.points],['Average points per household',sm.avg],['Work days approved',sm.workDays],['Hours worked',sm.hours],['Buy-out entries',sm.buyouts],['Logs still pending',sm.pending],[],['In Good Standing',sm.good],['On Track',sm.onTrack],['Needs Support',sm.needs]];
   const wb=XLSX.utils.book_new(),s1=XLSX.utils.aoa_to_sheet(info);s1['!cols']=[{wch:38},{wch:22}];XLSX.utils.book_append_sheet(wb,s1,'Year Summary');
-  const s2=XLSX.utils.json_to_sheet(rows.map(r=>({'Household ID':r.id,Name:r.name,Barangay:r.barangay,Pod:r.pod,'Target type':r.targetType,Target:r.target,Points:r.points,'Work days':r.workDays,Hours:r.hours,'Buy-outs':r.buyouts,'Buy-out days':r.buyoutDays,Pending:r.pending,Voided:r.voided,Standing:r.standing})));s2['!cols']=Array(14).fill({wch:14});XLSX.utils.book_append_sheet(wb,s2,'Household Summary');
-  const s3=XLSX.utils.json_to_sheet(L.map(a=>({Type:a.kind||'work',Date:a.date,'Household ID':a.hhId,Pod:a.pod||'','Time In':fmtT(a.timeIn),'Time Out':fmtT(a.timeOut),Hours:a.durationHours||0,Note:a.note||'',Points:a.points||0,Status:a.status,'Approved by':a.approvedBy||''})));s3['!cols']=Array(11).fill({wch:14});XLSX.utils.book_append_sheet(wb,s3,'Attendance Logs');
+  const s2=XLSX.utils.json_to_sheet(rows.map(r=>({'Household ID':r.id,Name:r.name,Barangay:r.barangay,Pod:r.pod,'Target type':r.targetType,Target:r.target,Points:r.points,'Work days':r.workDays,Hours:r.hours,Guests:r.guests??'','Buy-outs':r.buyouts,'Buy-out days':r.buyoutDays,Pending:r.pending,Voided:r.voided,Standing:r.standing})));s2['!cols']=Array(14).fill({wch:14});XLSX.utils.book_append_sheet(wb,s2,'Household Summary');
+  const s3=XLSX.utils.json_to_sheet(L.map(a=>({Type:a.kind||'work',Date:a.date,'Household ID':a.hhId,Pod:a.pod||'','Time In':fmtT(a.timeIn),'Time Out':fmtT(a.timeOut),Hours:a.durationHours||0,Guests:a.guests||0,Note:a.note||'',Points:a.points||0,Status:a.status,'Approved by':a.approvedBy||''})));s3['!cols']=Array(11).fill({wch:14});XLSX.utils.book_append_sheet(wb,s3,'Attendance Logs');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S.harv.filter(h=>inRange(h.date,st,en)).map(h=>({Date:h.date,Crop:h.crop,Amount:h.qty,Unit:h.unit,Destination:HDEST[h.dest]||h.dest,'Household ID':h.hhId||'',Notes:h.note||''}))),'Harvests');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S.plant.filter(p=>inRange(p.date,st,en)).map(p=>({Date:p.date,'Household ID':p.hhId,Crop:p.crop||'',Count:p.qty??'',Notes:p.note||''}))),'Plantings');
   XLSX.writeFile(wb,`ugnayan-gulayan-${id||'all'}.xlsx`)})
 });
 const uid=()=>Math.random().toString(36).slice(2,8);
@@ -606,7 +615,7 @@ const redrawBlk=()=>{const b=$('#blkBox');if(b)b.innerHTML=blocksHtml()};
 const pan=(k,t,sub,body)=>`<details class="panel" ${S.open[k]?'open':''} ontoggle="S_.open['${k}']=this.open"><summary><span><b>${t}</b><small>${sub}</small></span><i>\u25be</i></summary><div class="pbody">${body}</div></details>`;
 function settingsHtml(){const c=S.cfg,nb=(S.pb||initBlocks()).length;
   return pan('year','Program year',c.currentYear?yLabel(c.currentYear)+(c.yearEnd?' \u00b7 ended':' \u00b7 open'):'Not started',yearsView())
-  +pan('targets','Points and targets','Standard '+c.targetStandard+' \u00b7 Adjusted '+c.targetAdjusted,`<label>Standard target (points)</label><input id="tS" type="number" inputmode="numeric" value="${c.targetStandard}"><label>Adjusted target (points)</label><input id="tA" type="number" inputmode="numeric" value="${c.targetAdjusted}"><label>Points per work day</label><input id="tP" type="number" inputmode="numeric" value="${c.pointsPerDay}"><label>On Track from (standard / adjusted)</label><div class="row" style="flex-wrap:nowrap"><input id="oS" type="number" inputmode="numeric" value="${c.onTrackStandard}"><input id="oA" type="number" inputmode="numeric" value="${c.onTrackAdjusted}"></div><div style="margin-top:14px"><button onclick="A.saveCfg()">Save</button></div>`)
+  +pan('targets','Points and targets','Standard '+c.targetStandard+' \u00b7 Adjusted '+c.targetAdjusted,`<label>Standard target (points)</label><input id="tS" type="number" inputmode="numeric" value="${c.targetStandard}"><label>Adjusted target (points)</label><input id="tA" type="number" inputmode="numeric" value="${c.targetAdjusted}"><label>Points per work day</label><input id="tP" type="number" inputmode="numeric" value="${c.pointsPerDay}"><label>Bonus points per extra person</label><input id="tG" type="number" inputmode="numeric" value="${c.guestPoints}"><label>Most extra people counted per day</label><input id="tM" type="number" inputmode="numeric" value="${c.maxGuests}"><label>On Track from (standard / adjusted)</label><div class="row" style="flex-wrap:nowrap"><input id="oS" type="number" inputmode="numeric" value="${c.onTrackStandard}"><input id="oA" type="number" inputmode="numeric" value="${c.onTrackAdjusted}"></div><div style="margin-top:14px"><button onclick="A.saveCfg()">Save</button></div>`)
   +pan('clock','Clock-in',c.clockOpen+' to '+c.clockClose,`<label>Clock-in opens</label><input id="cO" type="time" value="${c.clockOpen}"><label>Clock-in closes</label><input id="cC" type="time" value="${c.clockClose}"><label>Auto-close open sessions after (hours)</label><input id="cM" type="number" inputmode="numeric" value="${c.maxShiftHours}"><div style="margin-top:14px"><button onclick="A.saveClock()">Save</button></div>`)
   +pan('terms','Terms',(c.terms||[]).length+' terms',`<p class="mut">Name, end date, and % of the target due by then. End dates are optional for now.</p><div id="termsBox">${termsHtml()}</div><div class="row"><button class="ghost sm" onclick="A.addTerm()">+ Add term</button><button class="ghost sm" onclick="A.evenTerms()">Spread evenly</button></div><div style="margin-top:14px"><button onclick="A.saveTerms()">Save</button></div>`)
   +pan('page','Program page',nb+' block'+(nb===1?'':'s'),`<p class="mut">Households see these blocks in this order. Drag the handle \u2807 or use \u25b2 \u25bc to reorder. Text supports Markdown: <code># Heading</code>, <code>**bold**</code>, <code>- list</code>, <code>[link](https://...)</code>.</p><div id="blkBox">${blocksHtml()}</div><div class="row"><button class="ghost" onclick="A.addBlk('slides')">+ Slides</button><button class="ghost" onclick="A.addBlk('text')">+ Text</button></div><div class="row" style="margin-top:14px"><button onclick="A.saveBlocks()">Save</button><button class="ghost" onclick="A.previewBlocks()">Preview</button></div>`)
@@ -700,7 +709,50 @@ document.addEventListener('pointerdown',e=>{const g=e.target.closest&&e.target.c
   const mv=ev=>{const y=ev.clientY;if(y<90)scrollBy(0,-14);else if(y>innerHeight-90)scrollBy(0,14);const nx=[...box.children].filter(c=>c!==el).find(c=>{const r=c.getBoundingClientRect();return y<r.top+r.height/2});box.insertBefore(el,nx||null)};
   const up=()=>{g.removeEventListener('pointermove',mv);g.removeEventListener('pointerup',up);g.removeEventListener('pointercancel',up);S.pb=[...box.children].map(c=>S.pb.find(b=>b.id===c.dataset.id));redrawBlk()};
   g.addEventListener('pointermove',mv);g.addEventListener('pointerup',up);g.addEventListener('pointercancel',up)});
-const ADM=['saveClock','saveTerms','saveBlocks','addBlk','delBlk','moveBlk','setBlk','previewBlocks','startYearModal','endYearModal','startYear','endYear','editYearModal','saveYear','undoLast','exportYear','endPreview','addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','setTarget','setPod','delLog','userDel','savePod','delPod','addPod','toggleSlot','migrateContacts','addWindow','saveWindow','delWindow','setWindow','addRole','renameRole','roleDesc','delRole','setHolder'],STF=['approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
+const guestBonus=l=>Math.min(Math.max(+l.guests||0,0),S.cfg.maxGuests)*S.cfg.guestPoints;
+const HDEST={feeding:'Fed to scholars',sold:'Sold',shared:'Shared with households',other:'Other'};
+const DEFCROPS=['Ampalaya','Kalabasa','Patola','Kamatis','Cherry tomato','Mustasa','Okra','Talong','Sitaw','Pechay','Kangkong','Sili','Upo','Mais','Saging'];
+const cropList=()=>[...new Set([...DEFCROPS,...S.harv.map(h=>h.crop),...S.plant.map(p=>p.crop)].filter(Boolean))].sort();
+const hInYear=h=>inRange(h.date,S.cfg.yearStart,S.cfg.yearEnd);
+const cap1=t=>{t=String(t||'').trim().replace(/\s+/g,' ');return t?t[0].toUpperCase()+t.slice(1):''};
+const qtyText=c=>[c.kg?c.kg+' kg':'',c.pcs?c.pcs+' pcs':'',c.bundle?c.bundle+' bundles':''].filter(Boolean).join(' \u00b7 ');
+function calcStats(){const H=S.harv.filter(hInYear),by={},dest={};let tk=0;
+  H.forEach(h=>{const c=by[h.crop]??={kg:0,pcs:0,bundle:0};c[h.unit]=(c[h.unit]||0)+(+h.qty||0);if(h.unit==='kg'){tk+=+h.qty||0;dest[h.dest]=(dest[h.dest]||0)+(+h.qty||0)}});
+  const crops=Object.entries(by).map(([crop,v])=>({crop,kg:r2(v.kg),pcs:r2(v.pcs),bundle:r2(v.bundle)})).sort((a,b)=>b.kg-a.kg||(b.pcs+b.bundle)-(a.pcs+a.bundle)).slice(0,10);
+  return{year:S.cfg.currentYear||'',kg:r2(tk),dest:Object.fromEntries(Object.entries(dest).map(([k,v])=>[k,r2(v)])),crops,entries:H.length,updatedAt:Date.now()}}
+const pushStats=async()=>{try{await setDoc(doc(db,'farmstats','summary'),calcStats())}catch(e){console.error(e)}};
+function farmCard(){const f=S.fstats;if(!f||!f.entries)return'';
+  return `<div class="card"><h2>Our farm${f.year?' \u00b7 '+yLabel(f.year):''}</h2><div class="kpi"><div><b>${f.kg}</b>kg harvested</div><div><b>${(f.dest&&f.dest.feeding)||0}</b>kg fed to scholars</div></div>${(f.crops||[]).slice(0,5).map(c=>`<div class="row sp"><span>${esc(c.crop)}</span><span class="mut">${qtyText(c)}</span></div>`).join('')}</div>`}
+function plantCard(id){const L=S.plant.filter(p=>p.hhId===id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  return `<div class="card"><div class="row sp"><h2 style="margin:0">What we planted</h2><button class="sm ghost" onclick="A.plantModal()">+ Add</button></div>${L.length?L.slice(0,12).map(p=>`<div class="log row sp"><div><b>${esc(p.crop||p.note)}${p.qty?' \u00d7'+p.qty:''}</b><div class="mut">${fmtD(p.date)}${p.crop&&p.note?' \u00b7 '+esc(p.note):''}</div></div><button class="text" onclick="A.delPlant('${p.id}')" aria-label="Remove">\u2715</button></div>`).join(''):'<p class="mut" style="margin-bottom:0">Nothing yet. Tell us what your household planted. Plants set by farm staff are not counted.</p>'}</div>`}
+function farmView(){const st=calcStats(),H=S.harv.filter(hInYear).sort((a,b)=>b.date>a.date?1:b.date<a.date?-1:(b.createdAt||0)-(a.createdAt||0)),P=[...S.plant].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).slice(0,15);
+  return `<div class="row sp" style="margin-bottom:12px"><h2 style="margin:0">Farm records</h2><span class="row"><button class="ghost" onclick="A.plantModal()">+ Plantings</button><button onclick="A.harvestModal()">+ Harvest</button></span></div>
+  <div class="card"><div class="kpi"><div><b>${st.kg}</b>kg harvested</div><div><b>${st.dest.feeding||0}</b>kg fed</div><div><b>${st.dest.sold||0}</b>kg sold</div><div><b>${st.entries}</b>harvest entries</div></div>${st.crops.map(c=>`<div class="row sp"><span>${esc(c.crop)}</span><span class="mut">${qtyText(c)}</span></div>`).join('')}</div>
+  <div class="card"><h2>Recent harvests</h2>${H.slice(0,30).map(h=>`<div class="log row sp"><div><b>${esc(h.crop)} \u00b7 ${h.qty} ${h.unit==='pcs'?'pcs':h.unit==='bundle'?'bundles':'kg'}</b><div class="mut">${fmtD(h.date)} \u00b7 ${HDEST[h.dest]||''}${h.hhId?' \u00b7 '+esc(hhName(h.hhId)):''}${h.note?' \u00b7 '+esc(h.note):''}</div></div><button class="text" onclick="A.delHarvest('${h.id}')" aria-label="Delete">\u2715</button></div>`).join('')||'<p class="mut">No harvests recorded yet.</p>'}</div>
+  <div class="card"><h2>What households planted</h2>${P.map(p=>`<div class="log row sp"><div><b>${esc(p.crop||p.note)}${p.qty?' \u00d7'+p.qty:''}</b><div class="mut">${esc(hhName(p.hhId))} \u00b7 ${fmtD(p.date)}${p.crop&&p.note?' \u00b7 '+esc(p.note):''}</div></div><button class="text" onclick="A.delPlant('${p.id}')" aria-label="Delete">\u2715</button></div>`).join('')||'<p class="mut">Nothing yet.</p>'}</div>`}
+function parsePlants(text){return String(text||'').split('\n').map(l=>l.replace(/^[\s\-\u2022*\d.)]+(?=[A-Za-z])/,'').trim()).filter(Boolean).map(l=>{
+  const m=/^(.*?)(?:\s+(\d+)\s*(?:pcs?|pc|piraso|plants?|halaman)?)?$/i.exec(l),name=(m[1]||l).trim(),words=name.split(/\s+/).length;
+  return words>4?{crop:'',qty:null,note:l.slice(0,150)}:{crop:cap1(name).slice(0,40),qty:m[2]?+m[2]:null,note:''}})}
+Object.assign(A,{
+ harvestModal(){open_(`<h2>Record a harvest</h2><label>Date</label><input id="hD" type="date" value="${ymd(new Date())}"><label>Crop</label><input id="hC" list="crops" placeholder="e.g. Okra" autocomplete="off"><datalist id="crops">${cropList().map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+  <div class="row" style="flex-wrap:nowrap"><div class="grow" style="min-width:0"><label>Amount</label><input id="hQ" type="number" step="0.01" inputmode="decimal"></div><div style="width:120px;flex:none"><label>Unit</label><select id="hU"><option value="kg">kg</option><option value="pcs">pieces</option><option value="bundle">bundles</option></select></div></div>
+  <label>Where it went</label><select id="hW">${Object.entries(HDEST).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><label>Credit a household (optional)</label><select id="hH"><option value="">None</option>${Object.keys(S.hh).sort(natCmp).map(i=>`<option value="${i}">${i} \u00b7 ${esc(S.hh[i].name)}</option>`).join('')}</select>
+  <label>Notes (optional)</label><input id="hN" placeholder="e.g. first picking from Plot 3"><div class="row" style="margin-top:14px"><button onclick="A.saveHarvest()">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
+ saveHarvest:guard(async()=>{const crop=cap1($('#hC').value),qty=+$('#hQ').value;if(!crop)return toast('Add the crop');if(!(qty>0))return toast('Add the amount');
+  await addDoc(collection(db,'harvests'),{date:$('#hD').value||ymd(new Date()),crop:crop.slice(0,40),qty:r2(qty),unit:$('#hU').value,dest:$('#hW').value,hhId:$('#hH').value,note:$('#hN').value.trim().slice(0,150),by:S.user.email,createdAt:Date.now()});
+  S._pushPending=true;A.close();toast('Harvest recorded')}),
+ delHarvest:guard(async id=>{if(!confirm('Delete this harvest entry?'))return;S._pushPending=true;await deleteDoc(doc(db,'harvests',id))}),
+ plantModal(pre=''){const ids=Object.keys(S.hh).sort(natCmp);
+  open_(`<h2>What was planted</h2><p class="mut">One plant per line, like <b>Okra 2</b> or <b>Ampalaya 2 pcs</b>. Only record what the household planted itself. Plants set by farm staff are not counted. Long lines are saved as notes.</p>${isStaff()?`<label>Household</label><select id="pH">${ids.map(i=>`<option value="${i}"${i===pre?' selected':''}>${i} \u00b7 ${esc(S.hh[i].name)}</option>`).join('')}</select>`:''}
+  <label>List</label><textarea id="pT" rows="7" placeholder="Ampalaya 2 pcs&#10;Kalabasa 1&#10;Okra" oninput="A.plantPreview()"></textarea><div id="pP" class="mut" style="margin-top:8px"></div><div class="row" style="margin-top:14px"><button onclick="A.savePlants()">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
+ plantPreview(){const L=parsePlants($('#pT').value);$('#pP').innerHTML=L.length?'Will save '+L.length+': '+L.map(p=>p.crop?esc(p.crop)+(p.qty?' \u00d7'+p.qty:''):'note').join(', '):''},
+ savePlants:guard(async()=>{const L=parsePlants($('#pT').value);if(!L.length)return toast('Type what was planted');
+  const hh=isStaff()?$('#pH').value:S.profile.householdId,pod=String(S.hh[hh]?.pod||''),now=Date.now(),b=writeBatch(db);
+  L.forEach(p=>b.set(doc(collection(db,'plantings')),{hhId:hh,pod,crop:p.crop,qty:p.qty,note:p.note,date:ymd(new Date()),by:S.user.email,createdAt:now}));
+  await b.commit();A.close();toast(L.length+' saved')}),
+ delPlant:guard(async id=>{if(confirm('Remove this entry?'))await deleteDoc(doc(db,'plantings',id))})
+});
+const ADM=['saveClock','saveTerms','saveBlocks','addBlk','delBlk','moveBlk','setBlk','previewBlocks','startYearModal','endYearModal','startYear','endYear','editYearModal','saveYear','undoLast','exportYear','endPreview','addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','setTarget','setPod','delLog','userDel','savePod','delPod','addPod','toggleSlot','migrateContacts','addWindow','saveWindow','delWindow','setWindow','addRole','renameRole','roleDesc','delRole','setHolder'],STF=['harvestModal','saveHarvest','delHarvest','approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
 ADM.forEach(k=>{const f=A[k];A[k]=(...a)=>S.role==='admin'?f(...a):null});
 STF.forEach(k=>{const f=A[k];A[k]=(...a)=>isStaff()?f(...a):null});
 window.S_=S;
