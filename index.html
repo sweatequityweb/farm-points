@@ -338,7 +338,7 @@ function manualModal(pre=''){
   const a=new Date(now);a.setHours(8,0,0,0);const b=new Date(now);b.setHours(10,0,0,0);
   open_(`<h2>Add a log</h2><label>Household</label><select id="mH">${ids.map(i=>`<option value="${i}"${i===pre?' selected':''}>${i} · ${esc(S.hh[i].name)}</option>`).join('')}</select>
   <label>Time in</label><input id="mI" type="datetime-local" value="${loc(a)}"><label>Time out</label><input id="mO" type="datetime-local" value="${loc(b)}">
-  <label>Note</label><input id="mN" placeholder="e.g. Weeding (forgot to clock out)"><label>People who worked, including the parent (+${S.cfg.guestPoints} per extra person)</label><input id="mG" type="number" min="1" max="${S.cfg.maxGuests+1}" inputmode="numeric" value="1">
+  <label>Note</label><input id="mN" placeholder="e.g. Weeding (forgot to clock out)"><label>How many people worked within your household? (+${S.cfg.guestPoints} per extra person)</label><input id="mG" type="number" min="1" max="${S.cfg.maxGuests+1}" inputmode="numeric" value="1">
   <label class="row" style="color:var(--txt);font-size:15px"><input id="mA" type="checkbox" checked style="width:24px;min-height:24px"> Approve right away</label>
   <p class="mut" style="margin:8px 0 0">If the date falls outside the open program year, the points will not count toward the household total.</p>
   <div class="row" style="margin-top:14px"><button onclick="A.saveManual()">Save log</button><button class="ghost" onclick="A.close()">Cancel</button></div>`);
