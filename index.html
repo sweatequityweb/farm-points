@@ -173,11 +173,7 @@ onAuthStateChanged(auth,user=>{
   S.role=em===ADMIN_EMAIL?'admin':em===LIAISON_EMAIL?'liaison':'parent';
   sub(doc(db,'config','program'),s=>{S.cfg={...DEF,...(s.data()||{})};
     S.cfg.yearStart=toD(S.cfg.yearStart);S.cfg.yearEnd=toD(S.cfg.yearEnd);
-<<<<<<< HEAD
     S._cfgOk=true;if(S.role==='admin'&&!(s.data()||{}).crops)setDoc(doc(db,'config','program'),{crops:DEFCROPS},{merge:true});const tt=S.cfg.terms||[];if(tt.length===3&&tt.every(t=>!t.end)&&tt.map(t=>t.pct).join()==='33,66,100')S.cfg.terms=DEF.terms;render()});
-=======
-    S._cfgOk=true;const tt=S.cfg.terms||[];if(tt.length===3&&tt.every(t=>!t.end)&&tt.map(t=>t.pct).join()==='33,66,100')S.cfg.terms=DEF.terms;render()});
->>>>>>> 76dcc3b60d038c34f19c4e2858087701e95eed70
   if(isStaff()){
     S.profile={status:'active'};
     sub(collection(db,'households'),s=>{S.hh={};s.forEach(d=>S.hh[d.id]=d.data());render()});
@@ -342,11 +338,7 @@ function manualModal(pre=''){
   const a=new Date(now);a.setHours(8,0,0,0);const b=new Date(now);b.setHours(10,0,0,0);
   open_(`<h2>Add a log</h2><label>Household</label><select id="mH">${ids.map(i=>`<option value="${i}"${i===pre?' selected':''}>${i} · ${esc(S.hh[i].name)}</option>`).join('')}</select>
   <label>Time in</label><input id="mI" type="datetime-local" value="${loc(a)}"><label>Time out</label><input id="mO" type="datetime-local" value="${loc(b)}">
-<<<<<<< HEAD
   <label>Note</label><input id="mN" placeholder="e.g. Weeding (forgot to clock out)"><label>People who worked, including the parent (+${S.cfg.guestPoints} per extra person)</label><input id="mG" type="number" min="1" max="${S.cfg.maxGuests+1}" inputmode="numeric" value="1">
-=======
-  <label>Note</label><input id="mN" placeholder="e.g. Weeding (forgot to clock out)"><label>How many people worked within your household? (+${S.cfg.guestPoints} per extra person)</label><input id="mG" type="number" min="1" max="${S.cfg.maxGuests+1}" inputmode="numeric" value="1">
->>>>>>> 76dcc3b60d038c34f19c4e2858087701e95eed70
   <label class="row" style="color:var(--txt);font-size:15px"><input id="mA" type="checkbox" checked style="width:24px;min-height:24px"> Approve right away</label>
   <p class="mut" style="margin:8px 0 0">If the date falls outside the open program year, the points will not count toward the household total.</p>
   <div class="row" style="margin-top:14px"><button onclick="A.saveManual()">Save log</button><button class="ghost" onclick="A.close()">Cancel</button></div>`);
@@ -595,11 +587,7 @@ Object.assign(A,{
   const s2=XLSX.utils.json_to_sheet(rows.map(r=>({'Household ID':r.id,Name:r.name,Barangay:r.barangay,Pod:r.pod,'Target type':r.targetType,Target:r.target,Points:r.points,'Work days':r.workDays,Hours:r.hours,Guests:r.guests??'','Buy-outs':r.buyouts,'Buy-out days':r.buyoutDays,Pending:r.pending,Voided:r.voided,Standing:r.standing})));s2['!cols']=Array(14).fill({wch:14});XLSX.utils.book_append_sheet(wb,s2,'Household Summary');
   const s3=XLSX.utils.json_to_sheet(L.map(a=>({Type:a.kind||'work',Date:a.date,'Household ID':a.hhId,Pod:a.pod||'','Time In':fmtT(a.timeIn),'Time Out':fmtT(a.timeOut),Hours:a.durationHours||0,Guests:a.guests||0,Note:a.note||'',Points:a.points||0,Status:a.status,'Approved by':a.approvedBy||''})));s3['!cols']=Array(11).fill({wch:14});XLSX.utils.book_append_sheet(wb,s3,'Attendance Logs');
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S.harv.filter(h=>inRange(h.date,st,en)).map(h=>({Date:h.date,Crop:h.crop,Amount:h.qty,Unit:h.unit,Destination:HDEST[h.dest]||h.dest,'Household ID':h.hhId||'',Notes:h.note||''}))),'Harvests');
-<<<<<<< HEAD
   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S.plant.filter(p=>p.status!=='pending'&&inRange(p.date,st,en)).map(p=>({Date:p.date,'Household ID':p.hhId,Crop:p.crop||'',Count:p.qty??'',Notes:p.note||''}))),'Plantings');
-=======
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S.plant.filter(p=>inRange(p.date,st,en)).map(p=>({Date:p.date,'Household ID':p.hhId,Crop:p.crop||'',Count:p.qty??'',Notes:p.note||''}))),'Plantings');
->>>>>>> 76dcc3b60d038c34f19c4e2858087701e95eed70
   XLSX.writeFile(wb,`ugnayan-gulayan-${id||'all'}.xlsx`)})
 });
 const uid=()=>Math.random().toString(36).slice(2,8);
@@ -630,10 +618,7 @@ function settingsHtml(){const c=S.cfg,nb=(S.pb||initBlocks()).length;
   +pan('targets','Points and targets','Standard '+c.targetStandard+' \u00b7 Adjusted '+c.targetAdjusted,`<label>Standard target (points)</label><input id="tS" type="number" inputmode="numeric" value="${c.targetStandard}"><label>Adjusted target (points)</label><input id="tA" type="number" inputmode="numeric" value="${c.targetAdjusted}"><label>Points per work day</label><input id="tP" type="number" inputmode="numeric" value="${c.pointsPerDay}"><label>Bonus points per extra person</label><input id="tG" type="number" inputmode="numeric" value="${c.guestPoints}"><label>Most extra people that earn a bonus per day (beyond the first)</label><input id="tM" type="number" inputmode="numeric" value="${c.maxGuests}"><label>On Track from (standard / adjusted)</label><div class="row" style="flex-wrap:nowrap"><input id="oS" type="number" inputmode="numeric" value="${c.onTrackStandard}"><input id="oA" type="number" inputmode="numeric" value="${c.onTrackAdjusted}"></div><div style="margin-top:14px"><button onclick="A.saveCfg()">Save</button></div>`)
   +pan('clock','Clock-in',c.clockOpen+' to '+c.clockClose,`<label>Clock-in opens</label><input id="cO" type="time" value="${c.clockOpen}"><label>Clock-in closes</label><input id="cC" type="time" value="${c.clockClose}"><label>Auto-close open sessions after (hours)</label><input id="cM" type="number" inputmode="numeric" value="${c.maxShiftHours}"><div style="margin-top:14px"><button onclick="A.saveClock()">Save</button></div>`)
   +pan('terms','Terms',(c.terms||[]).length+' terms',`<p class="mut">Name, end date, and % of the target due by then. End dates are optional for now.</p><div id="termsBox">${termsHtml()}</div><div class="row"><button class="ghost sm" onclick="A.addTerm()">+ Add term</button><button class="ghost sm" onclick="A.evenTerms()">Spread evenly</button></div><div style="margin-top:14px"><button onclick="A.saveTerms()">Save</button></div>`)
-<<<<<<< HEAD
   +pan('crops','Crop list',cropsCat().length+' crops',`<p class="mut">Households pick from this list when they record what they planted. Anything else waits for staff to check.</p>${cropsCat().map((c,i)=>`<div class="row sp" style="border-top:1px solid var(--line)"><span>${esc(c)}</span><button class="text" onclick="A.delCrop(${i})" aria-label="Remove ${esc(c)}">\u2715</button></div>`).join('')}<label for="nc">Add a crop</label><div class="row" style="flex-wrap:nowrap"><input id="nc" maxlength="30" placeholder="e.g. Talong" style="min-width:0"><button style="flex:none" onclick="A.addCrop()">Add</button></div>`)
-=======
->>>>>>> 76dcc3b60d038c34f19c4e2858087701e95eed70
   +pan('page','Program page',nb+' block'+(nb===1?'':'s'),`<p class="mut">Households see these blocks in this order. Drag the handle \u2807 or use \u25b2 \u25bc to reorder. Text supports Markdown: <code># Heading</code>, <code>**bold**</code>, <code>- list</code>, <code>[link](https://...)</code>.</p><div id="blkBox">${blocksHtml()}</div><div class="row"><button class="ghost" onclick="A.addBlk('slides')">+ Slides</button><button class="ghost" onclick="A.addBlk('text')">+ Text</button></div><div class="row" style="margin-top:14px"><button onclick="A.saveBlocks()">Save</button><button class="ghost" onclick="A.previewBlocks()">Preview</button></div>`)
   +pan('data','Excel','Import and export',`<p class="mut">Import the scholar sheet "Sorted by Barangay". Existing households keep their target type.</p><input id="xf" type="file" accept=".xlsx,.xls"><div class="row" style="margin-top:12px"><button onclick="A.importXlsx()">Import</button><button class="ghost" onclick="A.exportXlsx()">Export year</button></div>`)}
 Object.assign(A,{
@@ -728,11 +713,7 @@ document.addEventListener('pointerdown',e=>{const g=e.target.closest&&e.target.c
 const guestBonus=l=>Math.min(Math.max(+l.guests||0,0),S.cfg.maxGuests)*S.cfg.guestPoints;
 const HDEST={feeding:'Fed to scholars',sold:'Sold',shared:'Shared with households',other:'Other'};
 const DEFCROPS=['Ampalaya','Kalabasa','Patola','Kamatis','Cherry tomato','Mustasa','Okra','Talong','Sitaw','Pechay','Kangkong','Sili','Upo','Mais','Saging'];
-<<<<<<< HEAD
 const cropList=()=>[...new Set([...(S.cfg.crops&&S.cfg.crops.length?S.cfg.crops:DEFCROPS),...S.harv.map(h=>h.crop)].filter(Boolean))].sort();
-=======
-const cropList=()=>[...new Set([...DEFCROPS,...S.harv.map(h=>h.crop),...S.plant.map(p=>p.crop)].filter(Boolean))].sort();
->>>>>>> 76dcc3b60d038c34f19c4e2858087701e95eed70
 const hInYear=h=>inRange(h.date,S.cfg.yearStart,S.cfg.yearEnd);
 const cap1=t=>{t=String(t||'').trim().replace(/\s+/g,' ');return t?t[0].toUpperCase()+t.slice(1):''};
 const qtyText=c=>[c.kg?c.kg+' kg':'',c.pcs?c.pcs+' pcs':'',c.bundle?c.bundle+' bundles':''].filter(Boolean).join(' \u00b7 ');
@@ -743,7 +724,6 @@ function calcStats(){const H=S.harv.filter(hInYear),by={},dest={};let tk=0;
 const pushStats=async()=>{try{await setDoc(doc(db,'farmstats','summary'),calcStats())}catch(e){console.error(e)}};
 function farmCard(){const f=S.fstats;if(!f||!f.entries)return'';
   return `<div class="card"><h2>Our farm${f.year?' \u00b7 '+yLabel(f.year):''}</h2><div class="kpi"><div><b>${f.kg}</b>kg harvested</div><div><b>${(f.dest&&f.dest.feeding)||0}</b>kg fed to scholars</div></div>${(f.crops||[]).slice(0,5).map(c=>`<div class="row sp"><span>${esc(c.crop)}</span><span class="mut">${qtyText(c)}</span></div>`).join('')}</div>`}
-<<<<<<< HEAD
 const cropsCat=()=>S.cfg.crops&&S.cfg.crops.length?S.cfg.crops:DEFCROPS;
 function plantCard(id){const all=S.plant.filter(p=>p.hhId===id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)),ok=all.filter(p=>p.status!=='pending'),pend=all.filter(p=>p.status==='pending'),g={};
   ok.forEach(p=>{const k=p.crop||p.note;g[k]=(g[k]||0)+(+p.qty||0)});
@@ -757,18 +737,6 @@ function farmView(){const st=calcStats(),H=S.harv.filter(hInYear).sort((a,b)=>b.
   <div class="card"><div class="kpi"><div><b>${st.kg}</b>kg harvested</div><div><b>${st.dest.feeding||0}</b>kg fed</div><div><b>${st.dest.sold||0}</b>kg sold</div><div><b>${st.entries}</b>harvest entries</div></div>${st.crops.map(c=>`<div class="row sp"><span>${esc(c.crop)}</span><span class="mut">${qtyText(c)}</span></div>`).join('')}</div>
   <div class="card"><h2>Recent harvests</h2>${H.slice(0,30).map(h=>`<div class="log row sp"><div><b>${esc(h.crop)} \u00b7 ${h.qty} ${h.unit==='pcs'?'pcs':h.unit==='bundle'?'bundles':'kg'}</b><div class="mut">${fmtD(h.date)} \u00b7 ${HDEST[h.dest]||''}${h.hhId?' \u00b7 '+esc(hhName(h.hhId)):''}${h.note?' \u00b7 '+esc(h.note):''}</div></div><button class="text" onclick="A.delHarvest('${h.id}')" aria-label="Delete">\u2715</button></div>`).join('')||'<p class="mut">No harvests recorded yet.</p>'}</div>
   ${reviewCard()}<div class="card"><h2>What households planted</h2>${P.map(p=>`<div class="log row sp"><div><b>${esc(p.crop||p.note)}${p.qty?' \u00d7'+p.qty:''}</b><div class="mut">${esc(hhName(p.hhId))} \u00b7 ${fmtD(p.date)}${p.crop&&p.note?' \u00b7 '+esc(p.note):''}</div></div><button class="text" onclick="A.delPlant('${p.id}')" aria-label="Delete">\u2715</button></div>`).join('')||'<p class="mut">Nothing yet.</p>'}</div>`}
-=======
-function plantCard(id){const L=S.plant.filter(p=>p.hhId===id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-  return `<div class="card"><div class="row sp"><h2 style="margin:0">What we planted</h2><button class="sm ghost" onclick="A.plantModal()">+ Add</button></div>${L.length?L.slice(0,12).map(p=>`<div class="log row sp"><div><b>${esc(p.crop||p.note)}${p.qty?' \u00d7'+p.qty:''}</b><div class="mut">${fmtD(p.date)}${p.crop&&p.note?' \u00b7 '+esc(p.note):''}</div></div><button class="text" onclick="A.delPlant('${p.id}')" aria-label="Remove">\u2715</button></div>`).join(''):'<p class="mut" style="margin-bottom:0">Nothing yet. Tell us what your household planted. Plants set by farm staff are not counted.</p>'}</div>`}
-function farmView(){const st=calcStats(),H=S.harv.filter(hInYear).sort((a,b)=>b.date>a.date?1:b.date<a.date?-1:(b.createdAt||0)-(a.createdAt||0)),P=[...S.plant].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).slice(0,15);
-  return `<div class="row sp" style="margin-bottom:12px"><h2 style="margin:0">Farm records</h2><span class="row"><button class="ghost" onclick="A.plantModal()">+ Plantings</button><button onclick="A.harvestModal()">+ Harvest</button></span></div>
-  <div class="card"><div class="kpi"><div><b>${st.kg}</b>kg harvested</div><div><b>${st.dest.feeding||0}</b>kg fed</div><div><b>${st.dest.sold||0}</b>kg sold</div><div><b>${st.entries}</b>harvest entries</div></div>${st.crops.map(c=>`<div class="row sp"><span>${esc(c.crop)}</span><span class="mut">${qtyText(c)}</span></div>`).join('')}</div>
-  <div class="card"><h2>Recent harvests</h2>${H.slice(0,30).map(h=>`<div class="log row sp"><div><b>${esc(h.crop)} \u00b7 ${h.qty} ${h.unit==='pcs'?'pcs':h.unit==='bundle'?'bundles':'kg'}</b><div class="mut">${fmtD(h.date)} \u00b7 ${HDEST[h.dest]||''}${h.hhId?' \u00b7 '+esc(hhName(h.hhId)):''}${h.note?' \u00b7 '+esc(h.note):''}</div></div><button class="text" onclick="A.delHarvest('${h.id}')" aria-label="Delete">\u2715</button></div>`).join('')||'<p class="mut">No harvests recorded yet.</p>'}</div>
-  <div class="card"><h2>What households planted</h2>${P.map(p=>`<div class="log row sp"><div><b>${esc(p.crop||p.note)}${p.qty?' \u00d7'+p.qty:''}</b><div class="mut">${esc(hhName(p.hhId))} \u00b7 ${fmtD(p.date)}${p.crop&&p.note?' \u00b7 '+esc(p.note):''}</div></div><button class="text" onclick="A.delPlant('${p.id}')" aria-label="Delete">\u2715</button></div>`).join('')||'<p class="mut">Nothing yet.</p>'}</div>`}
-function parsePlants(text){return String(text||'').split('\n').map(l=>l.replace(/^[\s\-\u2022*\d.)]+(?=[A-Za-z])/,'').trim()).filter(Boolean).map(l=>{
-  const m=/^(.*?)(?:\s+(\d+)\s*(?:pcs?|pc|piraso|plants?|halaman)?)?$/i.exec(l),name=(m[1]||l).trim(),words=name.split(/\s+/).length;
-  return words>4?{crop:'',qty:null,note:l.slice(0,150)}:{crop:cap1(name).slice(0,40),qty:m[2]?+m[2]:null,note:''}})}
->>>>>>> 76dcc3b60d038c34f19c4e2858087701e95eed70
 Object.assign(A,{
  harvestModal(){open_(`<h2>Record a harvest</h2><label>Date</label><input id="hD" type="date" value="${ymd(new Date())}"><label>Crop</label><input id="hC" list="crops" placeholder="e.g. Okra" autocomplete="off"><datalist id="crops">${cropList().map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
   <div class="row" style="flex-wrap:nowrap"><div class="grow" style="min-width:0"><label>Amount</label><input id="hQ" type="number" step="0.01" inputmode="decimal"></div><div style="width:120px;flex:none"><label>Unit</label><select id="hU"><option value="kg">kg</option><option value="pcs">pieces</option><option value="bundle">bundles</option></select></div></div>
@@ -778,24 +746,12 @@ Object.assign(A,{
   await addDoc(collection(db,'harvests'),{date:$('#hD').value||ymd(new Date()),crop:crop.slice(0,40),qty:r2(qty),unit:$('#hU').value,dest:$('#hW').value,hhId:$('#hH').value,note:$('#hN').value.trim().slice(0,150),by:S.user.email,createdAt:Date.now()});
   S._pushPending=true;A.close();toast('Harvest recorded')}),
  delHarvest:guard(async id=>{if(!confirm('Delete this harvest entry?'))return;S._pushPending=true;await deleteDoc(doc(db,'harvests',id))}),
-<<<<<<< HEAD
-=======
- plantModal(pre=''){const ids=Object.keys(S.hh).sort(natCmp);
-  open_(`<h2>What was planted</h2><p class="mut">One plant per line, like <b>Okra 2</b> or <b>Ampalaya 2 pcs</b>. Only record what the household planted itself. Plants set by farm staff are not counted. Long lines are saved as notes.</p>${isStaff()?`<label>Household</label><select id="pH">${ids.map(i=>`<option value="${i}"${i===pre?' selected':''}>${i} \u00b7 ${esc(S.hh[i].name)}</option>`).join('')}</select>`:''}
-  <label>List</label><textarea id="pT" rows="7" placeholder="Ampalaya 2 pcs&#10;Kalabasa 1&#10;Okra" oninput="A.plantPreview()"></textarea><div id="pP" class="mut" style="margin-top:8px"></div><div class="row" style="margin-top:14px"><button onclick="A.savePlants()">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
- plantPreview(){const L=parsePlants($('#pT').value);$('#pP').innerHTML=L.length?'Will save '+L.length+': '+L.map(p=>p.crop?esc(p.crop)+(p.qty?' \u00d7'+p.qty:''):'note').join(', '):''},
- savePlants:guard(async()=>{const L=parsePlants($('#pT').value);if(!L.length)return toast('Type what was planted');
-  const hh=isStaff()?$('#pH').value:S.profile.householdId,pod=String(S.hh[hh]?.pod||''),now=Date.now(),b=writeBatch(db);
-  L.forEach(p=>b.set(doc(collection(db,'plantings')),{hhId:hh,pod,crop:p.crop,qty:p.qty,note:p.note,date:ymd(new Date()),by:S.user.email,createdAt:now}));
-  await b.commit();A.close();toast(L.length+' saved')}),
->>>>>>> 76dcc3b60d038c34f19c4e2858087701e95eed70
  delPlant:guard(async id=>{if(confirm('Remove this entry?'))await deleteDoc(doc(db,'plantings',id))})
 });
 Object.assign(A,{
  step:(id,d)=>{const i=$('#'+id),mn=+i.min||0,mx=+i.max||99;i.value=Math.min(mx,Math.max(mn,(parseInt(i.value)||mn)+d));A.pplHint()},
  pplHint:()=>{const n=Math.max(1,parseInt($('#cg')?.value)||1),h=$('#cgh');if(h)h.textContent=n<=1?'Just you':n+' people \u00b7 +'+Math.min(n-1,S.cfg.maxGuests)*S.cfg.guestPoints+' bonus points'}
 });
-<<<<<<< HEAD
 Object.assign(A,{
  plantModal(pre=''){S.pd={};S.pon=0;const ids=Object.keys(S.hh).sort(natCmp),today=ymd(new Date());
   open_(`<h2>What did your household plant?</h2><p class="mut">Tap + for each crop and how many were planted. Only count what your household planted yourselves, not what farm staff planted.</p>${isStaff()?`<label>Household</label><select id="pH">${ids.map(i=>`<option value="${i}"${i===pre?' selected':''}>${i} \u00b7 ${esc(S.hh[i].name)}</option>`).join('')}</select>`:''}
@@ -818,9 +774,6 @@ Object.assign(A,{
  delCrop:guard(async i=>{const c=cropsCat()[i];if(!confirm('Remove '+c+' from the list? Past entries stay.'))return;S.open.crops=true;await setDoc(doc(db,'config','program'),{crops:cropsCat().filter((x,k)=>k!==i)},{merge:true})})
 });
 const ADM=['addCrop','delCrop','saveClock','saveTerms','saveBlocks','addBlk','delBlk','moveBlk','setBlk','previewBlocks','startYearModal','endYearModal','startYear','endYear','editYearModal','saveYear','undoLast','exportYear','endPreview','addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','setTarget','setPod','delLog','userDel','savePod','delPod','addPod','toggleSlot','migrateContacts','addWindow','saveWindow','delWindow','setWindow','addRole','renameRole','roleDesc','delRole','setHolder'],STF=['approvePlant','harvestModal','saveHarvest','delHarvest','approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
-=======
-const ADM=['saveClock','saveTerms','saveBlocks','addBlk','delBlk','moveBlk','setBlk','previewBlocks','startYearModal','endYearModal','startYear','endYear','editYearModal','saveYear','undoLast','exportYear','endPreview','addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','setTarget','setPod','delLog','userDel','savePod','delPod','addPod','toggleSlot','migrateContacts','addWindow','saveWindow','delWindow','setWindow','addRole','renameRole','roleDesc','delRole','setHolder'],STF=['harvestModal','saveHarvest','delHarvest','approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
->>>>>>> 76dcc3b60d038c34f19c4e2858087701e95eed70
 ADM.forEach(k=>{const f=A[k];A[k]=(...a)=>S.role==='admin'?f(...a):null});
 STF.forEach(k=>{const f=A[k];A[k]=(...a)=>isStaff()?f(...a):null});
 window.S_=S;
