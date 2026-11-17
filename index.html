@@ -31,8 +31,6 @@ label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
 .mut{color:var(--mut);font-size:13px}.log{padding:12px 0;border-top:1px solid var(--line)}.log:first-child{border-top:0}
 .ring{display:block;margin:6px auto}.ring text{font-family:Roboto}
 .hero{text-align:center}.hero .std{margin-top:4px}
-.clock{position:sticky;bottom:calc(14px + env(safe-area-inset-bottom));z-index:4}
-.clock button{width:100%;min-height:64px;font-size:20px;border-radius:32px;box-shadow:0 4px 14px rgba(20,60,20,.35)}
 nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:6}
 nav button{flex:1;background:none;color:var(--mut);border-radius:0;min-height:60px;font-size:12px;position:relative}
 nav button.on{color:var(--pri);box-shadow:inset 0 3px 0 var(--pri)}
@@ -45,6 +43,24 @@ nav button.on{color:var(--pri);box-shadow:inset 0 3px 0 var(--pri)}
 .center .card{width:100%;max-width:420px;text-align:left}
 .bar{height:8px;background:#e3ebe3;border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--pri)}
 @media(prefers-reduced-motion:no-preference){button{transition:filter .15s}button:active{filter:brightness(.9)}}
+.kpi{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:12px 0}.kpi div{background:var(--bg);border-radius:10px;padding:12px;font-size:13px;color:var(--mut)}.kpi b{display:block;font-size:22px;color:var(--txt)}@media(min-width:760px){.kpi{grid-template-columns:repeat(4,1fr)}}
+.panel{background:var(--card);border-radius:12px;box-shadow:var(--sh);margin-bottom:12px;overflow:hidden}
+.panel summary{list-style:none;min-height:64px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+.panel summary::-webkit-details-marker{display:none}.panel summary small{display:block;color:var(--mut);font-size:13px;margin-top:2px}
+.panel summary i{font-style:normal;color:var(--mut);font-size:20px;transition:transform .15s}.panel[open] summary i{transform:rotate(180deg)}
+.pbody{padding:4px 16px 16px;border-top:1px solid var(--line)}.pbody .card{box-shadow:none;border:1px solid var(--line);padding:12px}
+.blk{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px 12px;margin-bottom:10px}.blk.drag{box-shadow:0 8px 22px rgba(0,0,0,.25);position:relative;z-index:3}
+.grip{touch-action:none;cursor:grab;font-size:28px;width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:var(--mut);user-select:none;flex:none}
+textarea{resize:vertical;min-height:96px}
+.chip.pod{background:#e8f5e9;color:var(--pri-d)}.chip.nopod{background:#eceff1;color:var(--mut)}
+.sch{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:500;background:#eef5ee;color:var(--pri-d);border:1px solid #cfe0cf}
+.slots{display:grid;grid-template-columns:minmax(84px,auto) 1fr 1fr;gap:8px;align-items:center}
+.slot{background:#fff;color:var(--mut);border:1px solid #b9c6b9;border-radius:12px;padding:0 8px}
+.slot.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.panel .panel{box-shadow:none;border:1px solid var(--line)}
+.chip.role{background:#e3f2fd;color:#0d47a1}
+.lock{background:var(--bg);border-radius:10px;padding:10px 12px}
+.md h2{font-size:20px;margin:14px 0 6px}.md h3{font-size:17px;margin:12px 0 4px}.md h4{font-size:15px;margin:10px 0 4px}.md p,.md li{line-height:1.55;margin:6px 0}.md blockquote{border-left:3px solid var(--line);margin:8px 0;padding-left:12px;color:var(--mut)}.md code{background:var(--bg);padding:1px 5px;border-radius:4px}.md hr{border:0;border-top:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -68,11 +84,11 @@ const ADMIN_EMAIL = "admin@lla.edu", LIAISON_EMAIL = "farm@lla.edu";
 /* ====================================================================================== */
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {getAuth,onAuthStateChanged,signInWithPopup,GoogleAuthProvider,signInWithEmailAndPassword,signOut} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import {getFirestore,doc,collection,onSnapshot,setDoc,updateDoc,deleteDoc,addDoc,getDocs,query,where,writeBatch} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {getFirestore,doc,collection,onSnapshot,setDoc,updateDoc,deleteDoc,addDoc,getDocs,query,where,writeBatch,deleteField} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
-const DEF={targetStandard:120,targetAdjusted:90,pointsPerDay:8,onTrackStandard:75,onTrackAdjusted:60,directory:{},clockOpen:'04:00',clockClose:'19:00',maxShiftHours:8,slidesUrl:'',yearStart:'',terms:[{name:'Term 1',end:'',pct:25},{name:'Term 2',end:'',pct:50},{name:'Term 3',end:'',pct:75},{name:'Term 4',end:'',pct:100}]};
-const S={user:null,role:null,profile:undefined,hh:{},att:[],users:[],cfg:{...DEF},tab:'approvals',unsubs:[],timer:null,showStaff:false,ptab:'home',podHh:{},podAtt:[],_pod:null};
+const DEF={targetStandard:120,targetAdjusted:90,pointsPerDay:8,onTrackStandard:75,onTrackAdjusted:60,directory:{},currentYear:'',yearEnd:'',pastYears:[],clockOpen:'04:00',clockClose:'19:00',maxShiftHours:8,guestPoints:2,maxGuests:5,slidesUrl:'',yearStart:'',terms:[{name:'Term 1',end:'',pct:25},{name:'Term 2',end:'',pct:50},{name:'Term 3',end:'',pct:75},{name:'Term 4',end:'',pct:100}]};
+const S={user:null,role:null,profile:undefined,hh:{},att:[],users:[],cfg:{...DEF},tab:'approvals',unsubs:[],timer:null,showStaff:false,open:{year:true},ptab:'home',podHh:{},podAtt:[],_pod:null,podDraft:{},winDraft:{},hsort:'id',hpod:'all',contacts:{},pp:{},holders:{},myContact:null,myPp:null,podContacts:{},podPts:{},reqFrom:[],reqTo:[],harv:[],plant:[],fstats:null};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isStaff=()=>S.role==='admin'||S.role==='liaison';
@@ -85,40 +101,109 @@ const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clea
 const guard=fn=>async(...a)=>{try{return await fn(...a)}catch(e){console.error(e);toast('Error: '+(e.code||e.message))}};
 
 /* ---------- derived data ---------- */
-const pts=id=>S.att.filter(a=>a.hhId===id&&a.status==='approved').reduce((s,a)=>s+(a.points||0),0);
+/* Normalise a date that may be a string, Date, number, Firestore Timestamp
+   or full ISO string, so year-window comparisons never silently fail. */
+const toD=v=>{if(!v)return'';if(typeof v==='string')return v.slice(0,10);if(typeof v==='number')return ymd(new Date(v));
+  if(v.toDate)return ymd(v.toDate());if(v.seconds!==undefined)return ymd(new Date(v.seconds*1000));
+  if(v instanceof Date)return ymd(v);return String(v).slice(0,10)};
+const yLabel=id=>String(id||'').replace('-','\u2013');
+const inRange=(d,a,b)=>{d=toD(d);a=toD(a);b=toD(b);return(!a||d>=a)&&(!b||d<=b)};
+const inYear=a=>inRange(a.date,S.cfg.yearStart,S.cfg.yearEnd);
+const yearOver=()=>!!S.cfg.yearEnd&&ymd(new Date())>toD(S.cfg.yearEnd);
+const pts=id=>S.att.filter(a=>a.hhId===id&&a.status==='approved'&&inYear(a)).reduce((s,a)=>s+(a.points||0),0);
 const target=h=>h?.targetType==='adjusted'?S.cfg.targetAdjusted:S.cfg.targetStandard;
 function standing(h,p){const t=target(h),mid=h?.targetType==='adjusted'?S.cfg.onTrackAdjusted:S.cfg.onTrackStandard,today=ymd(new Date()),T=(S.cfg.terms||[]).filter(x=>x.end).sort((a,b)=>a.end>b.end?1:-1);
   if(!S.cfg.yearStart||today<S.cfg.yearStart)return['Not started',''];
-  if(!T.length||today>T[T.length-1].end)return p>=t?['In Good Standing','approved']:p>=mid?['On Track','pending']:['Needs Support','voided'];
+  if(!T.length||S.cfg.yearEnd||today>T[T.length-1].end)return p>=t?['In Good Standing','approved']:p>=mid?['On Track','pending']:['Needs Support','voided'];
   const cur=T.find(x=>x.end>=today),thr=Math.round(t*cur.pct/100);
   return p>=thr?['Met '+cur.name+' pace','approved']:p>=thr*0.6?['Close to pace','pending']:['Behind pace','voided']}
 const hhName=id=>S.hh[id]?.name||S.cfg.directory?.[id]||id;
+
+/* ---------- pods + availability helpers ---------- */
+const natCmp=(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true});
+const isNumPod=p=>/^\d+$/.test(String(p||''));
+const podLabel=p=>p?(isNumPod(p)?'Pod '+p:String(p)):'No pod';
+const podChip=p=>p?`<span class="chip pod">${esc(podLabel(p))}</span>`:'<span class="chip nopod">No pod</span>';
+const podNums=()=>{const t=new Set((S.cfg.pods||[]).map(String));Object.values(S.hh).forEach(h=>{if(isNumPod(h.pod))t.add(String(h.pod))});return[...t].sort((a,b)=>a-b)};
+const legacyPods=()=>[...new Set(Object.values(S.hh).map(h=>h.pod).filter(p=>p&&!isNumPod(p)))];
+const DAYS=[['Mon','Monday'],['Tue','Tuesday'],['Wed','Wednesday'],['Thu','Thursday'],['Fri','Friday'],['Sat','Saturday'],['Sun','Sunday']];
+const slotName=k=>{const[d,t]=k.split('-'),f=DAYS.find(x=>x[0]===d);return f?f[1]+' '+(t==='AM'?'morning':'afternoon'):k};
+const slotOrd=k=>{const[d,t]=k.split('-');return DAYS.findIndex(x=>x[0]===d)*2+(t==='PM'?1:0)};
+function availLabels(av){const s=new Set(av||[]);return DAYS.flatMap(([d])=>{const a=s.has(d+'-AM'),p=s.has(d+'-PM');return a&&p?[d+' all day']:a?[d+' morning']:p?[d+' afternoon']:[]})}
+const availChips=av=>{const L=availLabels(av);return L.length?L.map(l=>`<span class="sch">${l}</span>`).join(''):'<span class="mut">No schedule set</span>'};
+const availText=av=>{const L=availLabels(av);return L.length?'Available: '+L.join(', '):'No schedule set'};
+const slotGrid=(id,av)=>`<div class="slots">${DAYS.map(([d,full])=>`<span>${full}</span>${['AM','PM'].map(t=>{const k=d+'-'+t,on=(av||[]).includes(k);return `<button type="button" class="slot${on?' on':''}" data-k="${k}" aria-pressed="${on}" onclick="A.toggleSlot('${id}',this)">${t==='AM'?'Morning':'Afternoon'}</button>`}).join('')}`).join('')}</div>`;
+function glance(ids,map,card){const n=ids.length,cnt={};ids.forEach(i=>(map[i]?.availability||[]).forEach(k=>cnt[k]=(cnt[k]||0)+1));
+  const rows=Object.entries(cnt).sort((a,b)=>b[1]-a[1]||slotOrd(a[0])-slotOrd(b[0]));if(!rows.length)return'';
+  const body=rows.map(([k,c])=>`<div style="margin:8px 0"><div class="row sp"><span>${slotName(k)}</span><span class="mut">${c} of ${n}</span></div><div class="bar"><i style="width:${c/n*100}%"></i></div></div>`).join('');
+  return card?`<div class="card"><h2>When your pod is free</h2><p class="mut" style="margin-top:0">Times most podmates can come are listed first.</p>${body}</div>`:`<div style="margin-top:12px"><div class="mut"><b>Pod overlap</b></div>${body}</div>`}
+const fmt12=t=>{const[h,m]=String(t||'').split(':');if(!h)return'';const n=+h;return((n+11)%12+1)+':'+m+' '+(n<12?'AM':'PM')};
+const dayFull=d=>(DAYS.find(x=>x[0]===d)||[])[1]||d;
+const winLabel=w=>w?dayFull(w.day)+' '+fmt12(w.start)+' \u2013 '+fmt12(w.end):'';
+const winById=id=>id?(S.cfg.windows||[]).find(w=>w.id===id):null;
+const winChip=x=>{const w=winById(x.window);return w?`<span class="sch">${esc(winLabel(w))}</span>`:''};
+const wSort=(a,b)=>DAYS.findIndex(x=>x[0]===a.day)-DAYS.findIndex(x=>x[0]===b.day)||String(a.start).localeCompare(String(b.start));
+const roleName=id=>((S.cfg.roles||[]).find(r=>r.id===id)||{}).name;
+const roleChips=hh=>Object.values(S.holders).filter(v=>v.hhId===hh&&roleName(v.roleId)).map(v=>`<span class="chip role">${esc(roleName(v.roleId))}</span>`).join('');
+/* Contact lookup: prefer the contacts doc, fall back to legacy fields on the
+   household doc (that's where older imports put phone + email). */
+const ctc=id=>{const c=S.contacts[id]||{},h=S.hh[id]||{};return{masterEmail:c.masterEmail||h.masterEmail||'',contactNumber:c.contactNumber||h.contactNumber||'',shared:c.shared===true}};
+const incoming=()=>{const pod=String(S.hh[S.profile?.householdId]?.pod||'');return S.reqTo.filter(r=>r.status==='pending'&&String(r.pod)===pod&&(r.type==='contact'||(roleName(r.roleId)&&S.holders[r.assignId]?.hhId===r.fromHh)))};
+function parseIds(text){const raw=String(text||'').split(/[\s,;]+/).map(t=>t.trim()).filter(Boolean),ids=[],bad=[];
+  const norm=t=>{const u=t.toUpperCase();if(S.hh[u])return u;const m=/^H?0*(\d+)$/.exec(u);if(m)for(const c of['H'+pad(m[1]),'H'+m[1]])if(S.hh[c])return c;return null};
+  raw.forEach(t=>{const id=norm(t);if(!id)bad.push(t);else if(!ids.includes(id))ids.push(id)});return{ids,bad}}
+let syncT;const schedSync=()=>{clearTimeout(syncT);syncT=setTimeout(syncPoints,1500)};
+async function syncPoints(){if(!S.user||!S._attOk||!S._cfgOk)return;
+  try{if(isStaff()){for(const id of Object.keys(S.pp)){const p=pts(id);if(S.pp[id].points!==p)await updateDoc(doc(db,'podpoints',id),{points:p})}}
+  else if(S.profile?.status==='active'&&S.myPp){const id=S.profile.householdId,p=pts(id);if(S.myPp.points!==p)await updateDoc(doc(db,'podpoints',id),{points:p})}}catch(e){console.error(e)}}
+const SORTS={id:'Household ID',ptsDesc:'Most points',ptsAsc:'Fewest points',newest:'Newest added',name:'Name A\u2013Z',pod:'Pod'};
+function hhSorted(){let ids=Object.keys(S.hh);const P={};ids.forEach(i=>P[i]=pts(i));const f=S.hpod||'all',k=S.hsort||'id';
+  if(f==='none')ids=ids.filter(i=>!S.hh[i].pod);else if(f!=='all')ids=ids.filter(i=>String(S.hh[i].pod||'')===f);
+  const pn=i=>isNumPod(S.hh[i].pod)?+S.hh[i].pod:S.hh[i].pod?9998:9999;
+  const C={id:natCmp,ptsDesc:(a,b)=>P[b]-P[a]||natCmp(a,b),ptsAsc:(a,b)=>P[a]-P[b]||natCmp(a,b),newest:(a,b)=>(S.hh[b].createdAt||0)-(S.hh[a].createdAt||0)||natCmp(b,a),name:(a,b)=>String(S.hh[a].name||'').localeCompare(String(S.hh[b].name||''))||natCmp(a,b),pod:(a,b)=>pn(a)-pn(b)||natCmp(a,b)};
+  return{ids:ids.sort(C[k]||natCmp),P}}
 
 /* ---------- auth + subscriptions ---------- */
 function clearSubs(){S.unsubs.forEach(u=>u());S.unsubs=[];clearInterval(S.timer)}
 const sub=(ref,cb)=>S.unsubs.push(onSnapshot(ref,cb,e=>{console.error(e);toast('Permission or network error: '+e.code)}));
 onAuthStateChanged(auth,user=>{
-  clearSubs();S.user=user;S.profile=undefined;S.hh={};S.att=[];S.users=[];S.podHh={};S.podAtt=[];S._pod=null;S._hhSub=false;
+  clearSubs();S.user=user;S.profile=undefined;S.hh={};S.att=[];S.users=[];S.podHh={};S.podAtt=[];S._pod=null;S._pn0=null;S._hhSub=false;S.contacts={};S.pp={};S.holders={};S.myContact=null;S.myPp=null;S.podContacts={};S.podPts={};S.reqFrom=[];S.reqTo=[];S._attOk=false;S._cfgOk=false;S.years=[];S.events=[];S.harv=[];S.plant=[];S.fstats=null;
   if(!user){S.role=null;return render()}
   const em=(user.email||'').toLowerCase();
   S.role=em===ADMIN_EMAIL?'admin':em===LIAISON_EMAIL?'liaison':'parent';
-  sub(doc(db,'config','program'),s=>{S.cfg={...DEF,...(s.data()||{})};const tt=S.cfg.terms||[];if(tt.length===3&&tt.every(t=>!t.end)&&tt.map(t=>t.pct).join()==='33,66,100')S.cfg.terms=DEF.terms;render()});
+  sub(doc(db,'config','program'),s=>{S.cfg={...DEF,...(s.data()||{})};
+    S.cfg.yearStart=toD(S.cfg.yearStart);S.cfg.yearEnd=toD(S.cfg.yearEnd);
+    S._cfgOk=true;if(S.role==='admin'&&!(s.data()||{}).crops)setDoc(doc(db,'config','program'),{crops:DEFCROPS},{merge:true});const tt=S.cfg.terms||[];if(tt.length===3&&tt.every(t=>!t.end)&&tt.map(t=>t.pct).join()==='33,66,100')S.cfg.terms=DEF.terms;render()});
   if(isStaff()){
     S.profile={status:'active'};
     sub(collection(db,'households'),s=>{S.hh={};s.forEach(d=>S.hh[d.id]=d.data());render()});
-    sub(collection(db,'attendance'),s=>{S.att=s.docs.map(d=>({id:d.id,...d.data()}));render()});
+    sub(collection(db,'attendance'),s=>{S.att=s.docs.map(d=>({id:d.id,...d.data()}));S._attOk=true;render()});
+    sub(collection(db,'contacts'),s=>{S.contacts={};s.forEach(d=>S.contacts[d.id]=d.data());render()});
+    sub(collection(db,'podpoints'),s=>{S.pp={};s.forEach(d=>S.pp[d.id]=d.data());render()});
+    sub(collection(db,'roleHolders'),s=>{S.holders={};s.forEach(d=>S.holders[d.id]=d.data());render()});
+    sub(collection(db,'harvests'),s=>{S.harv=s.docs.map(d=>({id:d.id,...d.data()}));if(S._pushPending){S._pushPending=false;pushStats()}render()});
+    sub(collection(db,'plantings'),s=>{S.plant=s.docs.map(d=>({id:d.id,...d.data()}));render()});
     sub(collection(db,'users'),s=>{S.users=s.docs.map(d=>({id:d.id,...d.data()}));S.users.forEach(u=>sweep(u.id,u));render()});
+    if(S.role==='admin'){sub(collection(db,'years'),s=>{S.years=s.docs.map(d=>d.data());render()});sub(collection(db,'yearEvents'),s=>{S.events=s.docs.map(d=>({id:d.id,...d.data()}));render()})}
   }else{
     sub(doc(db,'users',user.uid),s=>{
       S.profile=s.exists()?s.data():null;sweep(user.uid,S.profile);
       if(S.profile?.status==='active'&&S.profile.householdId&&!S._hhSub){
         S._hhSub=true;const id=S.profile.householdId;
         sub(doc(db,'households',id),x=>{S.hh={[id]:x.data()};const pd=x.data()?.pod;
-          if(pd&&S._pod!==pd){S._pod=pd;
+          if(pd&&S._pod!==pd){if(S._pn0!=null)S.unsubs.slice(S._pn0,S._pn0+4).forEach(u=>u());S._pn0=S.unsubs.length;S._pod=pd;S.podHh={};S.podContacts={};S.podPts={};S.holders={};
             sub(query(collection(db,'households'),where('pod','==',pd)),y=>{S.podHh={};y.forEach(d=>S.podHh[d.id]=d.data());render()});
-            sub(query(collection(db,'attendance'),where('pod','==',pd)),y=>{S.podAtt=y.docs.map(d=>d.data());render()})}
+            sub(query(collection(db,'contacts'),where('pod','==',pd),where('shared','==',true)),y=>{S.podContacts={};y.forEach(d=>S.podContacts[d.id]=d.data());render()});
+            sub(query(collection(db,'podpoints'),where('pod','==',pd),where('shown','==',true)),y=>{S.podPts={};y.forEach(d=>S.podPts[d.id]=d.data());render()});
+            sub(query(collection(db,'roleHolders'),where('pod','==',pd)),y=>{S.holders={};y.forEach(d=>S.holders[d.id]=d.data());render()})}
           render()});
-        sub(query(collection(db,'attendance'),where('hhId','==',id)),x=>{S.att=x.docs.map(d=>({id:d.id,...d.data()}));render()});
+        sub(doc(db,'contacts',id),x=>{S.myContact=x.exists()?x.data():null;render()});
+        sub(doc(db,'podpoints',id),x=>{S.myPp=x.exists()?x.data():null;render()});
+        sub(query(collection(db,'plantings'),where('hhId','==',id)),x=>{S.plant=x.docs.map(d=>({id:d.id,...d.data()}));render()});
+        sub(doc(db,'farmstats','summary'),x=>{S.fstats=x.exists()?x.data():null;render()});
+        sub(query(collection(db,'requests'),where('fromHh','==',id)),x=>{S.reqFrom=x.docs.map(d=>({id:d.id,...d.data()}));render()});
+        sub(query(collection(db,'requests'),where('toHh','==',id)),x=>{S.reqTo=x.docs.map(d=>({id:d.id,...d.data()}));render()});
+        sub(query(collection(db,'attendance'),where('hhId','==',id)),x=>{S.att=x.docs.map(d=>({id:d.id,...d.data()}));S._attOk=true;render()});
       }
       render();
     });
@@ -126,7 +211,10 @@ onAuthStateChanged(auth,user=>{
 });
 
 /* ---------- rendering ---------- */
+let reModal=null;
 function render(){
+  schedSync();
+  if(reModal&&$('#modal').classList.contains('show')&&!(document.activeElement&&$('#sheet').contains(document.activeElement)&&/^(SELECT|INPUT|TEXTAREA)$/.test(document.activeElement.tagName))){try{reModal()}catch(e){console.error(e)}}
   const app=$('#app'),nav=$('#nav'),hdr=$('#hdr');
   clearInterval(S.timer);
   if(!S.user){hdr.hidden=nav.hidden=true;return app.innerHTML=loginView()}
@@ -137,7 +225,7 @@ function render(){
   nav.hidden=true;nav.innerHTML='';
   if(!S.profile)return app.innerHTML=claimView();
   if(S.profile.status!=='active')return app.innerHTML=`<div class="center"><div style="font-size:56px">🌱</div><h2>Waiting for approval</h2><p class="mut" style="max-width:320px">Your request to join household <b>${esc(hhName(S.profile.householdId))}</b> was sent. The Farm Liaison will confirm it. This screen updates by itself.</p><button class="ghost" onclick="A.cancelClaim()">Choose a different household</button></div>`;
-  nav.hidden=false;nav.innerHTML=[['home','Home'],['pod','My pod'],['program','Program']].map(([k,l])=>`<button class="${S.ptab===k?'on':''}" onclick="S_.ptab='${k}';A.r()">${l}</button>`).join('');
+  nav.hidden=false;const nIn=incoming().length;nav.innerHTML=[['home','Home'],['pod','My pod'],['program','Program']].map(([k,l])=>`<button class="${S.ptab===k?'on':''}" onclick="S_.ptab='${k}';A.r()">${l}${k==='pod'&&nIn?`<span class="badge">${nIn}</span>`:''}</button>`).join('');
   parentView();
 }
 function loginView(){return `<div class="center"><div style="font-size:64px">🥬</div><h1 style="margin:0;color:var(--pri-d)">Ugnayan Gulayan</h1><p class="mut">Farm attendance and points for Noah Scholarship households</p>
@@ -150,28 +238,31 @@ function claimView(){
 
 function logHtml(a,opts={}){
   const low=a.durationHours<2&&a.status==='pending';
+  const out=a.status==='approved'&&a.points>0&&!inYear(a);
   return `<div class="log"><div class="row sp"><b>${opts.hh?esc(hhName(a.hhId))+' · ':''}${fmtD(a.date)}</b><span class="chip ${a.status}">${a.status}${a.status==='approved'?' +'+a.points:''}</span></div>
   <div class="mut">${a.kind==='buyout'?'Buy-out · '+esc(a.item)+' · '+a.days+' day(s) equivalent':fmtT(a.timeIn)+' – '+fmtT(a.timeOut)+' · '+hrs(a.durationHours||0)+(a.note?' · '+esc(a.note):'')}</div>
-  ${low?'<span class="chip warn">Under 2 hours: earns 0 points</span>':''}${a.autoClosed?'<span class="chip warn">Auto-closed: times need checking</span>':''}${opts.actions||''}${isStaff()&&a.kind!=='buyout'?`<div><button class="text" onclick="A.editModal('${a.id}')">Edit times or note</button></div>`:''}</div>`}
+  ${low?'<span class="chip warn">Under 2 hours: earns 0 points</span>':''}${out?'<span class="chip warn">Outside the program year: not counted</span>':''}${a.autoClosed?'<span class="chip warn">Auto-closed: times need checking</span>':''}${a.guests>0?`<span class="chip pod">${a.guests+1} people worked${a.guestNames?': '+esc(a.guestNames):''}</span>`:''}${opts.actions||''}${isStaff()&&a.kind!=='buyout'?`<div><button class="text" onclick="A.editModal('${a.id}')">Edit times or note</button></div>`:''}</div>`}
 
 function parentView(){if(S.ptab==='program')return programView();if(S.ptab==='pod')return podView();
   const id=S.profile.householdId,h=S.hh[id]||{},p=pts(id),t=target(h),[st,cls]=standing(h,p);
   const open=S.profile.activeClockIn,C=2*Math.PI*90,frac=Math.min(p/t,1);
-  const mine=[...S.att].sort((a,b)=>b.timeIn>a.timeIn?1:-1);
-  $('#app').innerHTML=`<div class="card hero"><div class="mut">${esc(h.barangay||'')}</div><h2 style="font-size:22px">${esc(h.name||id)} household</h2>
+  const mine=S.att.filter(inYear).sort((a,b)=>b.timeIn>a.timeIn?1:-1);
+  const outPts=S.att.filter(a=>a.status==='approved'&&!inYear(a)).reduce((s,a)=>s+(a.points||0),0);
+  $('#app').innerHTML=`${yearBanner()}<div class="card hero"><div class="mut">${esc(h.barangay||'')}${S.cfg.currentYear?' \u00b7 '+yLabel(S.cfg.currentYear):''}</div><h2 style="font-size:22px">${esc(h.name||id)} household</h2>
   <svg class="ring" width="220" height="220" viewBox="0 0 220 220" role="img" aria-label="${p} of ${t} points"><circle cx="110" cy="110" r="90" fill="none" stroke="#e3ebe3" stroke-width="16"/><circle cx="110" cy="110" r="90" fill="none" stroke="#2e7d32" stroke-width="16" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-frac)}" transform="rotate(-90 110 110)"/><text x="110" y="112" text-anchor="middle" font-size="48" font-weight="700" fill="#1b5e20">${p}</text><text x="110" y="140" text-anchor="middle" font-size="15" fill="#5f6f61">of ${t} points</text></svg>
-  <p class="mut std">Every farm day adds to your points. Thank you for showing up!</p></div>
-  ${open?`<div class="card hero"><div class="mut">Working since ${fmtT(open)}</div><div id="tm" style="font-size:40px;font-weight:500">0:00:00</div><div class="mut" id="tmh"></div>${Date.now()-new Date(open)<3e5?`<button class="text" onclick="A.cancelIn()">Tapped by mistake? Cancel</button>`:''}</div>`:''}
-  <div class="card"><h2>History</h2>${mine.length?mine.map(a=>logHtml(a)).join(''):'<p class="mut">No logs yet. Tap Clock in when you start work.</p>'}</div>
-  <div class="clock">${open?`<button class="red" onclick="A.clockOutModal()">CLOCK OUT</button>`:clockBtn()}</div>`;
+  <p class="mut std">Every farm day adds to your points. Thank you for showing up!</p>
+  ${outPts?`<p class="mut" style="color:var(--pend);margin:6px 0 0">${outPts} approved point(s) fall outside the program year and are not counted.</p>`:''}</div>
+  ${open?`<div class="card hero"><div class="mut">Working since ${fmtT(open)}</div><div id="tm" style="font-size:40px;font-weight:500">0:00:00</div><div class="mut" id="tmh"></div>${Date.now()-new Date(open)<3e5?`<button class="text" onclick="A.cancelIn()">Tapped by mistake? Cancel</button>`:''}<div style="margin-top:10px"><button class="red" style="width:100%;min-height:64px;font-size:20px;border-radius:32px" onclick="A.clockOutModal()">CLOCK OUT</button></div></div>`:`<div class="card" style="text-align:center">${clockBtn()}</div>`}
+  ${farmCard()}${plantCard(id)}<div class="card"><h2>History</h2>${mine.length?mine.map(a=>logHtml(a)).join(''):'<p class="mut">No logs yet. Tap Clock in when you start work.</p>'}</div>${pastHtml(id)}`;
   if(open){const tick=()=>{const s=Math.max(0,Math.floor((Date.now()-new Date(open))/1000));$('#tm').textContent=`${Math.floor(s/3600)}:${pad(Math.floor(s/60)%60)}:${pad(s%60)}`;$('#tmh').textContent=s>=7200?'2-hour minimum reached':'Counts for points after 2 hours'};tick();S.timer=setInterval(tick,1000)}
 }
 
 function staffView(){
+  const ae=document.activeElement;if((S.tab==='settings'||S.tab==='households')&&ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)&&ae.type!=='file'&&$('#app').contains(ae))return;
   const pendL=S.att.filter(a=>a.status==='pending').sort((a,b)=>a.timeIn>b.timeIn?1:-1);
   const pendU=S.users.filter(u=>u.status==='pending');
   const n=pendL.length+pendU.length,adm=S.role==='admin';
-  const tabs=[['approvals','Approvals',n],['households','Households'],...(adm?[['users','Users'],['settings','Settings']]:[])];
+  const tabs=[['approvals','Approvals',n],['households','Households'],['farm','Farm'],...(adm?[['users','Users'],['settings','Settings']]:[])];
   if(!tabs.some(t=>t[0]===S.tab))S.tab='approvals';
   $('#nav').innerHTML=tabs.map(([k,l,b])=>`<button class="${S.tab===k?'on':''}" onclick="S_.tab='${k}';A.r()">${l}${b?`<span class="badge">${b}</span>`:''}</button>`).join('');
   let h='';
@@ -180,64 +271,99 @@ function staffView(){
     if(pendU.length)h+=`<div class="card"><h2>Households requesting access</h2>${pendU.map(u=>userRow(u)).join('')}</div>`;
     h+=`<div class="card"><h2>Pending logs</h2>${pendL.length?pendL.map(a=>logHtml(a,{hh:1,actions:`<div class="row" style="margin-top:8px"><button class="sm" onclick="A.approve('${a.id}')">Approve</button><button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button></div>`})).join(''):'<p class="mut">No pending logs.</p>'}</div>`;
   }else if(S.tab==='households'){
-    const list=Object.keys(S.hh).sort();
-    h+=`<div class="card"><h2>Households (${list.length})</h2>${list.length?list.map(id=>{const x=S.hh[id],p=pts(id),t=target(x),[st,c]=standing(x,p);
-      return `<div class="log" onclick="A.hhModal('${id}')" style="cursor:pointer"><div class="row sp"><b>${id} · ${esc(x.name)}</b><span class="chip ${c}">${st}</span></div><div class="mut">${esc(x.barangay||'')} · ${p}/${t} pts${x.targetType==='adjusted'?' · adjusted':''}</div><div class="bar"><i style="width:${Math.min(100,p/t*100)}%"></i></div></div>`}).join(''):'<p class="mut">No households yet.'+(adm?' Import the Excel file in Settings.':'')+'</p>'}</div>`;
+    const {ids:list,P}=hhSorted(),total=Object.keys(S.hh).length,hs=S.hsort||'id',hp=S.hpod||'all';
+    if(adm)h+=privacyNotice()+podsPanel()+rolesPanel();
+    const popt=[['all','All households'],['none','No pod yet'],...podNums().map(n=>[n,'Pod '+n]),...legacyPods().map(n=>[n,n])];
+    h+=`<div class="card"><h2>Households (${list.length}${list.length!==total?' of '+total:''})</h2>
+    <div class="row" style="flex-wrap:nowrap;align-items:flex-end;margin-bottom:6px"><div class="grow" style="min-width:0"><label for="hs" style="margin-top:0">Sort by</label><select id="hs" onchange="this.blur();S_.hsort=this.value;A.r()">${Object.entries(SORTS).map(([k,l])=>`<option value="${k}"${hs===k?' selected':''}>${l}</option>`).join('')}</select></div><div class="grow" style="min-width:0"><label for="hp" style="margin-top:0">Show</label><select id="hp" onchange="this.blur();S_.hpod=this.value;A.r()">${popt.map(([k,l])=>`<option value="${esc(k)}"${hp===k?' selected':''}>${esc(l)}</option>`).join('')}</select></div></div>
+    ${list.length?list.map(id=>{const x=S.hh[id],p=P[id],t=target(x),[st,c]=standing(x,p);
+      return `<div class="log" onclick="A.hhModal('${id}')" style="cursor:pointer"><div class="row sp"><b>${id} \u00b7 ${esc(x.name)}</b><span class="chip ${c}">${st}</span></div><div class="mut">${esc(x.barangay||'')} \u00b7 ${p}/${t} pts${x.targetType==='adjusted'?' \u00b7 adjusted':''}</div><div class="row" style="gap:6px;margin:4px 0 2px">${podChip(x.pod)}${winChip(x)}${roleChips(id)}</div><div class="mut" style="margin-bottom:6px">${availText(x.availability)}</div><div class="bar"><i style="width:${Math.min(100,p/t*100)}%"></i></div></div>`}).join(''):(total?'<p class="mut">No households match this filter.</p>':'<p class="mut">No households yet.'+(adm?' Import the Excel file in Settings.':'')+'</p>')}</div>`;
+  }else if(S.tab==='farm'){h+=farmView();
   }else if(S.tab==='users'){
     const ps=S.users.filter(u=>u.role==='parent');
     h+=`<div class="card"><h2>Household accounts</h2>${ps.length?ps.map(u=>userRow(u,true)).join(''):'<p class="mut">No sign-ins yet.</p>'}</div>`;
   }else{
-    h+=`<div class="grid two"><div class="card"><h2>Targets</h2><label>Standard target (points)</label><input id="tS" type="number" value="${S.cfg.targetStandard}"><label>Adjusted target (points)</label><input id="tA" type="number" value="${S.cfg.targetAdjusted}"><label>Points per work day</label><input id="tP" type="number" value="${S.cfg.pointsPerDay}"><label>On Track from (standard / adjusted)</label><div class="row"><input id="oS" type="number" value="${S.cfg.onTrackStandard}" style="flex:1"><input id="oA" type="number" value="${S.cfg.onTrackAdjusted}" style="flex:1"></div><div style="margin-top:14px"><button onclick="A.saveCfg()">Save settings</button></div></div>
-    <div class="card"><h2>Clock-in and program</h2><label>Clock-in opens</label><input id="cO" type="time" value="${S.cfg.clockOpen}"><label>Clock-in closes</label><input id="cC" type="time" value="${S.cfg.clockClose}"><label>Auto-close open sessions after (hours)</label><input id="cM" type="number" value="${S.cfg.maxShiftHours}"><label>Program year starts</label><input id="yS" type="date" value="${S.cfg.yearStart||''}"><label>Terms: name, end date, % of target due by then</label><div id="termsBox">${termsHtml()}</div><p class="mut" style="margin:4px 0 8px">End dates are optional for now. Terms without an end date are saved but not used yet.</p><div class="row"><button class="ghost sm" onclick="A.addTerm()">+ Add term</button><button class="ghost sm" onclick="A.evenTerms()">Spread evenly</button></div><label>Google Slides link (shown to parents)</label><input id="sU" value="${esc(S.cfg.slidesUrl||'')}" placeholder="https://docs.google.com/presentation/d/..."><div style="margin-top:14px"><button onclick="A.saveCfg2()">Save</button></div></div>
-    <div class="card"><h2>Excel</h2><p class="mut">Import the scholar sheet "Sorted by Barangay". Existing households keep their target type.</p><input id="xf" type="file" accept=".xlsx,.xls"><div class="row" style="margin-top:12px"><button onclick="A.importXlsx()">Import</button><button class="ghost" onclick="A.exportXlsx()">Export report</button><button class="ghost" onclick="A.seedPods()">Load pods</button></div></div></div>`;
+    h+=settingsHtml();
   }
   $('#app').innerHTML=h;
 }
+function privacyNotice(){const n=Object.values(S.hh).filter(h=>h.contactNumber!==undefined||h.masterEmail!==undefined).length;if(!n)return'';
+  return `<div class="card" style="border-left:4px solid var(--pend)"><b>Move contact details to private storage</b><p class="mut">${n} households still have phone numbers and emails stored where podmates' devices can read them. Moving them lets each household decide whether to share. Publish the new Firestore rules first.</p><button class="sm" onclick="A.migrateContacts()">Move now</button></div>`}
+function winBlock(w){const d=S.winDraft[w.id]??={day:w.day,start:w.start,end:w.end,hh:Object.keys(S.hh).filter(i=>S.hh[i].window===w.id).sort(natCmp).join(', ')};
+  return `<div class="blk"><div class="row sp"><b>${esc(winLabel(w))}</b><button class="text" style="min-height:40px;padding:0 8px" onclick="A.delWindow('${w.id}')">Delete</button></div>
+  <label for="wd${w.id}">Day</label><select id="wd${w.id}" onchange="S_.winDraft['${w.id}'].day=this.value">${DAYS.map(([k,f])=>`<option value="${k}"${d.day===k?' selected':''}>${f}</option>`).join('')}</select>
+  <div class="row" style="flex-wrap:nowrap"><div class="grow" style="min-width:0"><label for="ws${w.id}">From</label><input id="ws${w.id}" type="time" value="${d.start}" onchange="S_.winDraft['${w.id}'].start=this.value"></div><div class="grow" style="min-width:0"><label for="we${w.id}">To</label><input id="we${w.id}" type="time" value="${d.end}" onchange="S_.winDraft['${w.id}'].end=this.value"></div></div>
+  <label for="wh${w.id}">Households in this window</label><input id="wh${w.id}" value="${esc(d.hh)}" placeholder="H01, H10, H14" autocapitalize="characters" autocomplete="off" oninput="S_.winDraft['${w.id}'].hh=this.value">
+  <div style="margin-top:12px"><button class="sm" onclick="A.saveWindow('${w.id}')">Save window</button></div></div>`}
+function podsPanel(){const L=podNums(),leg=legacyPods(),dr=S.podDraft??={},none=Object.keys(S.hh).filter(i=>!S.hh[i].pod).sort(natCmp);
+  const body=`<p class="mut" style="margin-top:12px">Add a pod, type the household IDs in it separated by commas (like <b>H01, H10, H14</b>) and tap Save pod. Then add the pod's windows: the days and times it works at the farm.</p>
+  ${none.length?`<p style="margin:0 0 12px"><b>Not in a pod yet (${none.length}):</b> <span class="mut">${none.join(', ')}</span></p>`:''}
+  ${L.map(n=>{const ms=Object.keys(S.hh).filter(i=>String(S.hh[i].pod||'')===n).sort(natCmp),v=dr[n]??ms.join(', '),W=(S.cfg.windows||[]).filter(w=>String(w.pod)===n).sort(wSort);
+    return pan('pod'+n,'Pod '+n,(ms.length?ms.length+' household'+(ms.length===1?'':'s'):'Empty')+(W.length?' \u00b7 '+W.length+' window'+(W.length===1?'':'s'):''),`<label for="pt${n}">Households in Pod ${n}</label><input id="pt${n}" value="${esc(v)}" placeholder="H01, H10, H14" autocapitalize="characters" autocomplete="off" oninput="S_.podDraft['${n}']=this.value"><p class="mut" style="margin:6px 0 0">${ms.length?ms.map(i=>esc(hhName(i))).join(', '):'No one yet.'}</p><div style="margin-top:10px"><button class="sm" onclick="A.savePod('${n}')">Save pod</button></div>
+    <div style="margin-top:18px"><b>Windows</b><p class="mut" style="margin:2px 0 8px">A window is a day and time the pod works at the farm. Each household goes in one window.</p>${W.map(winBlock).join('')||'<p class="mut">No windows yet.</p>'}<button class="ghost sm" onclick="A.addWindow('${n}')">+ Add window</button></div>
+    ${glance(ms,S.hh)}<div style="margin-top:16px"><button class="sm ghost" onclick="A.delPod('${n}')">Delete pod</button></div>`)}).join('')||'<p class="mut">No pods yet. Tap + Add pod to make the first one.</p>'}
+  <div class="row" style="margin-top:4px"><button class="ghost" onclick="A.addPod()">+ Add pod</button></div>
+  ${leg.length?`<div class="card" style="margin-top:12px"><b>Old pod names found</b><p class="mut" style="margin-bottom:0">${leg.map(esc).join(', ')} are not numbered pods. Typing their households into a numbered pod above replaces the old name.</p></div>`:''}`;
+  return pan('pods','Pods and windows',L.length?L.length+' pod'+(L.length===1?'':'s')+' \u00b7 tap to manage':'Set up pods',body)}
+function rolesPanel(){const R=S.cfg.roles||[],pods=podNums();
+  const body=`<p class="mut" style="margin-top:12px">Create a role like Pod Commander, then choose who holds it in each pod. A holder can pass the role to a podmate, who has to accept.</p>
+  ${R.map(r=>{const nh=Object.values(S.holders).filter(h=>h.roleId===r.id).length;
+    return pan('role'+r.id,esc(r.name),nh?nh+' pod'+(nh===1?'':'s')+' assigned':'Nobody assigned yet',`<label>Role name</label><input value="${esc(r.name)}" onchange="A.renameRole('${r.id}',this.value)"><label>What it does (optional)</label><input value="${esc(r.desc||'')}" placeholder="e.g. Confirms the crew count and runs the briefing" onchange="A.roleDesc('${r.id}',this.value)"><label style="margin-top:14px">Who holds it</label>${pods.map(n=>{const ms=Object.keys(S.hh).filter(i=>String(S.hh[i].pod||'')===n).sort(natCmp);if(!ms.length)return'';const cur=(S.holders[r.id+'_'+n]||{}).hhId||'';
+      return `<div class="row" style="flex-wrap:nowrap;margin-bottom:8px"><b style="min-width:52px">Pod ${n}</b><select aria-label="Holder in Pod ${n}" onchange="A.setHolder('${r.id}','${n}',this.value)"><option value="">Nobody yet</option>${ms.map(i=>`<option value="${i}"${cur===i?' selected':''}>${i} \u00b7 ${esc(S.hh[i].name)}</option>`).join('')}</select></div>`}).join('')||'<p class="mut">Set up pods first.</p>'}<p class="mut">Name and description save when you leave the field.</p><div style="margin-top:8px"><button class="sm ghost" onclick="A.delRole('${r.id}')">Delete role</button></div>`)}).join('')||'<p class="mut">No roles yet.</p>'}
+  <label for="nr">New role</label><div class="row" style="flex-wrap:nowrap"><input id="nr" placeholder="e.g. Pod Commander" style="min-width:0"><button style="flex:none" onclick="A.addRole()">Add</button></div>`;
+  return pan('roles','Roles',R.length?R.map(r=>esc(r.name)).join(', '):'Create roles like Pod Commander',body)}
 function userRow(u,all){
-  const hh=S.hh[u.householdId],ok=hh&&hh.masterEmail&&hh.masterEmail.toLowerCase()===(u.email||'').toLowerCase();
+  const hh=S.hh[u.householdId],me_=ctc(u.householdId).masterEmail,ok=me_&&me_.toLowerCase()===(u.email||'').toLowerCase();
   return `<div class="log"><div class="row sp"><b>${esc(u.email)}</b><span class="chip ${u.status==='active'?'approved':'pending'}">${u.status}</span></div>
   <div class="mut">Claims ${esc(u.householdId)} · ${esc(hhName(u.householdId))}</div>
-  <div style="font-size:13px;color:${ok?'var(--ok)':'var(--pend)'}">${ok?'✓ Matches the email on record':'⚠ Doesn\'t match the email on record'+(hh?.masterEmail?' ('+esc(hh.masterEmail)+')':'')}</div>
+  <div style="font-size:13px;color:${ok?'var(--ok)':'var(--pend)'}">${ok?'✓ Matches the email on record':'⚠ Doesn\'t match the email on record'+(me_?' ('+esc(me_)+')':'')}</div>
   <div class="row" style="margin-top:8px">${u.status==='pending'?`<button class="sm" onclick="A.userSet('${u.id}','active')">Approve</button><button class="sm ghost" onclick="A.userDel('${u.id}')">Reject</button>`:S.role==='admin'?`<button class="sm ghost" onclick="A.userDel('${u.id}')">Remove access</button>`:''}</div></div>`}
 
 /* ---------- modals ---------- */
-const open_=h=>{$('#sheet').innerHTML=h;$('#modal').classList.add('show')};
+const open_=(h,re)=>{$('#sheet').innerHTML=h;$('#modal').classList.add('show');reModal=re||null};
 function hhModal(id){
-  const x=S.hh[id],logs=S.att.filter(a=>a.hhId===id).sort((a,b)=>b.timeIn>a.timeIn?1:-1),adm=S.role==='admin';
+  const x=S.hh[id]||{},c_=ctc(id),logs=S.att.filter(a=>a.hhId===id).sort((a,b)=>b.timeIn>a.timeIn?1:-1),adm=S.role==='admin';
+  const outPts=logs.filter(a=>a.status==='approved'&&!inYear(a)).reduce((s,a)=>s+(a.points||0),0);
   open_(`<div class="row sp"><h2 style="margin:0">${id} · ${esc(x.name)}</h2><button class="text" onclick="A.close()">Close</button></div>
-  <p class="mut">${esc(x.barangay||'')}<br>${esc(x.masterEmail||'no email on record')} · ${esc(x.contactNumber||'')}<br><b>${pts(id)}</b> / ${target(x)} points</p>${termRows(id,x)}
+  <p class="mut">${esc(x.barangay||'')}<br>${esc(c_.masterEmail||'no email on record')} · ${esc(c_.contactNumber||'')}<br><b>${pts(id)}</b> / ${target(x)} points</p>${outPts?`<p class="mut" style="color:var(--pend);margin:0 0 8px">${outPts} approved point(s) fall outside the program year and are not counted.</p>`:''}${termRows(id,x)}
   ${adm?`<label>Target type</label><select onchange="A.setTarget('${id}',this.value)"><option value="standard"${x.targetType!=='adjusted'?' selected':''}>Standard (${S.cfg.targetStandard})</option><option value="adjusted"${x.targetType==='adjusted'?' selected':''}>Adjusted (${S.cfg.targetAdjusted})</option></select>`:''}
-  ${adm?`<label>Pod</label><input list="pods" value="${esc(x.pod||'')}" onchange="A.setPod('${id}',this.value)"><datalist id="pods">${[...new Set(Object.values(S.hh).map(v=>v.pod).filter(Boolean))].map(v=>`<option value="${esc(v)}">`).join('')}</datalist>`:`<p class="mut">Pod: ${esc(x.pod||'none')}</p>`}<div class="row" style="margin:12px 0"><button class="sm" onclick="A.manualModal('${id}')">+ Add log</button><button class="sm ghost" onclick="A.buyoutModal('${id}')">Buy-out</button></div>
-  ${logs.map(a=>logHtml(a,{actions:`<div class="row" style="margin-top:6px">${a.status!=='approved'?`<button class="sm" onclick="A.approve('${a.id}')">Approve</button>`:''}${a.status!=='voided'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button>`:''}${a.status!=='pending'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','pending')">Reopen</button>`:''}${adm?`<button class="sm ghost" onclick="A.delLog('${a.id}')">Delete</button>`:''}</div>`})).join('')||'<p class="mut">No logs yet.</p>'}`);
+  ${adm?`<label for="hp1">Pod</label><select id="hp1" onchange="A.setPod('${id}',this.value)"><option value="">No pod</option>${[...podNums(),...(x.pod&&!isNumPod(x.pod)?[x.pod]:[])].map(n=>`<option value="${esc(n)}"${String(x.pod||'')===n?' selected':''}>${esc(podLabel(n))}</option>`).join('')}</select>`:`<p class="mut">${esc(podLabel(x.pod))}</p>`}
+  ${x.pod?(adm?`<label for="hw1">Window</label><select id="hw1" onchange="A.setWindow('${id}',this.value)"><option value="">No window</option>${(S.cfg.windows||[]).filter(w=>String(w.pod)===String(x.pod)).sort(wSort).map(w=>`<option value="${w.id}"${x.window===w.id?' selected':''}>${esc(winLabel(w))}</option>`).join('')}</select>`:`<p class="mut">${esc(winLabel(winById(x.window))||'No window')}</p>`):''}${roleChips(id)?`<div class="row" style="margin-top:10px">${roleChips(id)}</div>`:''}
+  <label>Days available at the farm</label>${adm?`<p class="mut" style="margin:0 0 8px">Tap to turn a time on or off. It saves right away.</p>${slotGrid(id,x.availability)}`:`<div class="row" style="gap:6px">${availChips(x.availability)}</div>`}
+  <div class="row" style="margin:12px 0"><button class="sm" onclick="A.manualModal('${id}')">+ Add log</button><button class="sm ghost" onclick="A.buyoutModal('${id}')">Buy-out</button><button class="sm ghost" onclick="A.plantModal('${id}')">Plantings</button></div>
+  ${logs.map(a=>logHtml(a,{actions:`<div class="row" style="margin-top:6px">${a.status!=='approved'?`<button class="sm" onclick="A.approve('${a.id}')">Approve</button>`:''}${a.status!=='voided'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button>`:''}${a.status!=='pending'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','pending')">Reopen</button>`:''}${adm?`<button class="sm ghost" onclick="A.delLog('${a.id}')">Delete</button>`:''}</div>`})).join('')||'<p class="mut">No logs yet.</p>'}`,()=>hhModal(id));
 }
 function manualModal(pre=''){
   const now=new Date(),ids=Object.keys(S.hh).sort(),loc=d=>`${ymd(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const a=new Date(now);a.setHours(8,0,0,0);const b=new Date(now);b.setHours(10,0,0,0);
   open_(`<h2>Add a log</h2><label>Household</label><select id="mH">${ids.map(i=>`<option value="${i}"${i===pre?' selected':''}>${i} · ${esc(S.hh[i].name)}</option>`).join('')}</select>
   <label>Time in</label><input id="mI" type="datetime-local" value="${loc(a)}"><label>Time out</label><input id="mO" type="datetime-local" value="${loc(b)}">
-  <label>Note</label><input id="mN" placeholder="e.g. Weeding (forgot to clock out)">
+  <label>Note</label><input id="mN" placeholder="e.g. Weeding (forgot to clock out)"><label>People who worked, including the parent (+${S.cfg.guestPoints} per extra person)</label><input id="mG" type="number" min="1" max="${S.cfg.maxGuests+1}" inputmode="numeric" value="1">
   <label class="row" style="color:var(--txt);font-size:15px"><input id="mA" type="checkbox" checked style="width:24px;min-height:24px"> Approve right away</label>
+  <p class="mut" style="margin:8px 0 0">If the date falls outside the open program year, the points will not count toward the household total.</p>
   <div class="row" style="margin-top:14px"><button onclick="A.saveManual()">Save log</button><button class="ghost" onclick="A.close()">Cancel</button></div>`);
 }
 
 /* ---------- actions ---------- */
 const A=window.A={
-  r:render,close:()=>$('#modal').classList.remove('show'),
+  r:render,close:()=>{$('#modal').classList.remove('show');reModal=null},
   google:guard(()=>signInWithPopup(auth,new GoogleAuthProvider())),
   emailLogin:guard(async()=>{try{await signInWithEmailAndPassword(auth,$('#em').value.trim(),$('#pw').value)}catch(e){toast('Check your email and password')}}),
   logout:()=>{S._hhSub=false;signOut(auth)},
   claim:guard(async()=>{const id=$('#hhSel').value;if(!id)return toast('Pick your family name');
     await setDoc(doc(db,'users',S.user.uid),{email:S.user.email.toLowerCase(),role:'parent',householdId:id,status:'pending'})}),
   cancelClaim:guard(async()=>{await deleteDoc(doc(db,'users',S.user.uid))}),
-  clockIn:guard(async()=>{if(!inWin())return toast('Clock-in is closed right now');if(!confirm('Start your work day now?'))return;await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:new Date().toISOString()});toast('Clocked in')}),
-  clockOutModal:()=>open_(`<h2>Clock out</h2><p class="mut">Worked ${hrs((Date.now()-new Date(S.profile.activeClockIn))/36e5)}</p><label>What did you work on?</label><input id="cn" placeholder="e.g. Weeding"><div class="row" style="margin-top:14px"><button class="red" onclick="A.clockOut()">Clock out and submit</button><button class="ghost" onclick="A.close()">Keep working</button></div>`),
+  clockIn:guard(async()=>{if(yearOver())return toast('The program year has ended');if(!inWin())return toast('Clock-in is closed right now');if(!confirm('Start your work day now?'))return;await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:new Date().toISOString()});toast('Clocked in')}),
+  clockOutModal:()=>open_(`<h2>Clock out</h2><p class="mut">Worked ${hrs((Date.now()-new Date(S.profile.activeClockIn))/36e5)}</p><label>What did you work on?</label><input id="cn" placeholder="e.g. Weeding"><label>How many people worked today, including you?</label><div class="row" style="flex-wrap:nowrap;justify-content:center"><button type="button" class="ghost" style="width:56px;padding:0;font-size:24px" aria-label="One less" onclick="A.step('cg',-1)">\u2212</button><input id="cg" type="number" min="1" max="${S.cfg.maxGuests+1}" inputmode="numeric" value="1" style="text-align:center;font-size:22px;width:80px;flex:none" oninput="A.pplHint()"><button type="button" class="ghost" style="width:56px;padding:0;font-size:24px" aria-label="One more" onclick="A.step('cg',1)">+</button></div><p id="cgh" class="mut" style="text-align:center;margin:6px 0 0">Just you</p><label>Who came with you? (optional)</label><input id="cgn" placeholder="e.g. Ate Mila, Jun"><div class="row" style="margin-top:14px"><button class="red" onclick="A.clockOut()">Clock out and submit</button><button class="ghost" onclick="A.close()">Keep working</button></div>`),
   clockOut:guard(async()=>{
     const tin=new Date(S.profile.activeClockIn),tout=new Date(),dur=Math.round((tout-tin)/36e3)/100;
-    await addDoc(collection(db,'attendance'),{hhId:S.profile.householdId,pod:S.hh[S.profile.householdId]?.pod||'',date:ymd(tin),timeIn:tin.toISOString(),timeOut:tout.toISOString(),durationHours:dur,note:$('#cn').value.trim(),status:'pending',points:0,loggedBy:S.user.uid,approvedBy:''});
+    await addDoc(collection(db,'attendance'),{hhId:S.profile.householdId,pod:S.hh[S.profile.householdId]?.pod||'',date:ymd(tin),timeIn:tin.toISOString(),timeOut:tout.toISOString(),durationHours:dur,note:$('#cn').value.trim(),guests:Math.min(Math.max((parseInt($('#cg').value)||1)-1,0),S.cfg.maxGuests),guestNames:($('#cgn').value||'').trim().slice(0,150),status:'pending',points:0,loggedBy:S.user.uid,approvedBy:''});
     await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:null});A.close();toast('Submitted for approval')}),
   approve:guard(async id=>{
     const l=S.att.find(x=>x.id===id),ppd=S.cfg.pointsPerDay;let p=l.durationHours>=2?ppd:0,why='This log is under 2 hours.';
+    if(!inYear(l)&&!confirm('This log is dated outside the program year, so it will not count toward the household total. Approve anyway?'))return;
     if(S.att.some(x=>x.id!==id&&x.hhId===l.hhId&&x.date===l.date&&x.status==='approved'&&x.points>0)){p=0;why='This household already earned points for this day (one work day counts once).'}
+    if(p>0)p+=guestBonus(l);
     if(p===0&&!confirm(why+' Approve with 0 points?'))return;
     await updateDoc(doc(db,'attendance',id),{status:'approved',points:p,approvedBy:S.user.email});toast(p?`Approved +${p}`:'Approved, 0 points')}),
   setStatus:guard(async(id,s)=>{await updateDoc(doc(db,'attendance',id),{status:s,points:0,approvedBy:s==='pending'?'':S.user.email})}),
@@ -249,12 +375,13 @@ const A=window.A={
   saveManual:guard(async()=>{
     const hh=$('#mH').value,i=new Date($('#mI').value),o=new Date($('#mO').value);
     if(isNaN(i)||isNaN(o)||o<=i)return toast('Time out must be after time in');
-    const dur=Math.round((o-i)/36e3)/100,ok=$('#mA').checked;let p=0;
-    if(ok&&dur>=2&&!S.att.some(x=>x.hhId===hh&&x.date===ymd(i)&&x.status==='approved'&&x.points>0))p=S.cfg.pointsPerDay;
-    await addDoc(collection(db,'attendance'),{hhId:hh,pod:S.hh[hh]?.pod||'',date:ymd(i),timeIn:i.toISOString(),timeOut:o.toISOString(),durationHours:dur,note:$('#mN').value.trim(),status:ok?'approved':'pending',points:p,loggedBy:S.user.uid,approvedBy:ok?S.user.email:''});
+    const dur=Math.round((o-i)/36e3)/100,ok=$('#mA').checked;let p=0;const g=Math.min(Math.max((+$('#mG').value||1)-1,0),S.cfg.maxGuests);
+    if(!inRange(ymd(i),S.cfg.yearStart,S.cfg.yearEnd)&&!confirm('This date is outside the program year, so it will not count toward the household total. Save anyway?'))return;
+    if(ok&&dur>=2&&!S.att.some(x=>x.hhId===hh&&x.date===ymd(i)&&x.status==='approved'&&x.points>0))p=S.cfg.pointsPerDay+g*S.cfg.guestPoints;
+    await addDoc(collection(db,'attendance'),{hhId:hh,pod:S.hh[hh]?.pod||'',date:ymd(i),timeIn:i.toISOString(),timeOut:o.toISOString(),durationHours:dur,note:$('#mN').value.trim(),guests:g,status:ok?'approved':'pending',points:p,loggedBy:S.user.uid,approvedBy:ok?S.user.email:''});
     A.close();toast(ok&&!p?'Saved with 0 points (under 2h or day already counted)':'Log saved')}),
   saveCfg:guard(async()=>{const n=id=>+$(id).value;
-    await setDoc(doc(db,'config','program'),{targetStandard:n('#tS'),targetAdjusted:n('#tA'),pointsPerDay:n('#tP'),onTrackStandard:n('#oS'),onTrackAdjusted:n('#oA')},{merge:true});toast('Settings saved')}),
+    await setDoc(doc(db,'config','program'),{targetStandard:n('#tS'),targetAdjusted:n('#tA'),pointsPerDay:n('#tP'),guestPoints:n('#tG'),maxGuests:n('#tM'),onTrackStandard:n('#oS'),onTrackAdjusted:n('#oA')},{merge:true});toast('Settings saved')}),
   importXlsx:guard(async()=>{
     const f=$('#xf').files[0];if(!f)return toast('Choose the Excel file first');
     const wb=XLSX.read(await f.arrayBuffer()),ws=wb.Sheets['Sorted by Barangay']||wb.Sheets[wb.SheetNames[0]];
@@ -267,9 +394,11 @@ const A=window.A={
     const b=writeBatch(db),dir={};
     for(const [id,rs] of Object.entries(g)){
       const name=String(rs[0]['Last Name']).trim();dir[id]=name;
-      const d={name,barangay:first(rs,'Barangay'),masterEmail:first(rs,'E-mail Address').toLowerCase(),contactNumber:phone(first(rs,'Contact Number'))};
-      if(!existing[id])d.targetType='standard';
+      const d={name,barangay:first(rs,'Barangay')},em=first(rs,'E-mail Address').toLowerCase(),ph=phone(first(rs,'Contact Number')),c={};
+      if(em)c.masterEmail=em;if(ph)c.contactNumber=ph;
+      if(!existing[id]){d.targetType='standard';d.createdAt=Date.now()}else if(existing[id].pod)c.pod=String(existing[id].pod);
       b.set(doc(db,'households',id),d,{merge:true});
+      if(Object.keys(c).length)b.set(doc(db,'contacts',id),c,{merge:true});
     }
     rows.forEach(r=>b.set(doc(db,'scholars',String(r['Scholar ID']).trim()),{householdId:String(r['Household ID']).trim(),firstName:String(r['First Name']).trim(),lastName:String(r['Last Name']).trim(),gradeLevel:String(r['Grade Level']).trim()}));
     b.set(doc(db,'config','program'),{directory:dir,...Object.fromEntries(Object.entries(DEF).filter(([k])=>k!=='directory'&&S.cfg[k]===DEF[k]).map(([k])=>[k,DEF[k]]))},{merge:true});
@@ -282,37 +411,85 @@ const A=window.A={
 };
 
 const inWin=()=>{const n=new Date(),m=n.getHours()*60+n.getMinutes(),f=t=>{const[h,k]=String(t).split(':');return +h*60+ +k};return m>=f(S.cfg.clockOpen)&&m<f(S.cfg.clockClose)};
-const clockBtn=()=>inWin()?`<button onclick="A.clockIn()">CLOCK IN</button>`:`<button disabled>CLOCK IN</button><p class="mut" style="text-align:center;margin:6px 0 0">Clock-in is open ${S.cfg.clockOpen} to ${S.cfg.clockClose}</p>`;
+const clockBtn=()=>yearOver()?`<button disabled style="width:100%;min-height:64px;font-size:20px;border-radius:32px">CLOCK IN</button><p class="mut" style="text-align:center;margin:6px 0 0">The ${yLabel(S.cfg.currentYear)} year has ended. The new year hasn't started yet.</p>`:inWin()?`<button style="width:100%;min-height:64px;font-size:20px;border-radius:32px" onclick="A.clockIn()">CLOCK IN</button>`:`<button disabled style="width:100%;min-height:64px;font-size:20px;border-radius:32px">CLOCK IN</button><p class="mut" style="text-align:center;margin:6px 0 0">Clock-in is open ${S.cfg.clockOpen} to ${S.cfg.clockClose}</p>`;
 async function sweep(uid,u){if(!u?.activeClockIn||(Date.now()-new Date(u.activeClockIn))/36e5<S.cfg.maxShiftHours)return;
   const tin=new Date(u.activeClockIn),tout=new Date(+tin+S.cfg.maxShiftHours*36e5);
   try{await setDoc(doc(db,'attendance',`auto_${uid}_${tin.getTime()}`),{hhId:u.householdId,pod:S.hh[u.householdId]?.pod||'',date:ymd(tin),timeIn:tin.toISOString(),timeOut:tout.toISOString(),durationHours:+S.cfg.maxShiftHours,note:'Auto-closed: no clock-out',autoClosed:true,status:'pending',points:0,loggedBy:uid,approvedBy:''})}catch(e){}
   try{await updateDoc(doc(db,'users',uid),{activeClockIn:null})}catch(e){}}
 function termRows(id,h){const T=(S.cfg.terms||[]).filter(x=>x.end),t=target(h),today=ymd(new Date());
-  return T.map(x=>{const thr=Math.round(t*x.pct/100),got=S.att.filter(a=>a.hhId===id&&a.status==='approved'&&a.date<=x.end).reduce((q,a)=>q+(a.points||0),0),closed=x.end<today,ok=got>=thr;
+  return T.map(x=>{const thr=Math.round(t*x.pct/100),got=S.att.filter(a=>a.hhId===id&&a.status==='approved'&&inRange(a.date,'',x.end)&&inYear(a)).reduce((q,a)=>q+(a.points||0),0),closed=toD(x.end)<today,ok=got>=thr;
     return `<div class="row sp mut"><span>${esc(x.name)} (by ${fmtD(x.end)}): ${thr} pts</span><b style="color:${ok?'var(--ok)':closed?'var(--void)':'var(--pend)'}">${ok?'Met':closed?'Not met':'In progress'}</b></div>`}).join('')}
 const slideEmbed=u=>{const m=String(u||'').match(/presentation\/d\/(e\/)?([\w-]+)/);return m?`https://docs.google.com/presentation/d/${m[1]||''}${m[2]}/embed?start=false&loop=false`:''};
-function programView(){const u=slideEmbed(S.cfg.slidesUrl);$('#app').innerHTML=`<div class="card"><h2>About the program</h2>${u?`<div style="position:relative;padding-top:56.25%;border-radius:8px;overflow:hidden"><iframe src="${esc(u)}" style="position:absolute;inset:0;width:100%;height:100%;border:0" allowfullscreen title="Program presentation"></iframe></div><p><a href="${esc(S.cfg.slidesUrl)}" target="_blank" rel="noopener">Open in Google Slides</a></p>`:'<p class="mut">The presentation has not been added yet.</p>'}</div>`}
-function podView(){const id=S.profile.householdId,pod=S.hh[id]?.pod;
+function programView(){const bl=S.cfg.programBlocks??(S.cfg.slidesUrl?[{type:'slides',title:'About the program',url:S.cfg.slidesUrl,md:''}]:[]);$('#app').innerHTML=programHtml(bl)}
+function reqCard(r){const from=S.podHh[r.fromHh]?.name||r.fromHh;
+  if(r.type==='contact')return `<div class="log"><div><b>${esc(from)}</b> asks you to share your contact details with your pod.</div><div class="mut" style="margin:4px 0 8px">Everyone in your pod would see your phone number and email. You can stop sharing any time.</div><div class="row"><button class="sm" onclick="A.answerReq('${r.id}',true)">Share</button><button class="sm ghost" onclick="A.answerReq('${r.id}',false)">Not now</button></div></div>`;
+  return `<div class="log"><div><b>${esc(from)}</b> wants to pass the <b>${esc(roleName(r.roleId)||'')}</b> role to you.</div><div class="mut" style="margin:4px 0 8px">The role moves to you only if you accept.</div><div class="row"><button class="sm" onclick="A.answerReq('${r.id}',true)">Accept</button><button class="sm ghost" onclick="A.answerReq('${r.id}',false)">Decline</button></div></div>`}
+function podView(){const id=S.profile.householdId,me=S.hh[id]||{},pod=me.pod;
   if(!pod)return $('#app').innerHTML='<div class="card"><h2>My pod</h2><p class="mut">You have not been placed in a pod yet. The Farm Liaison will add you.</p></div>';
-  const ids=Object.keys(S.podHh).sort(),pp=i=>i===id?pts(i):S.podAtt.filter(a=>a.hhId===i&&a.status==='approved').reduce((q,a)=>q+(a.points||0),0);
-  $('#app').innerHTML=`<div class="card"><h2>${esc(pod)}</h2><p class="mut">Only people in your pod can see this. Use it to coordinate and help each other.</p>${ids.map(i=>{const x=S.podHh[i],p=pp(i),help=standing(x,p)[1]==='voided';return `<div class="log"><div class="row sp"><b>${esc(x.name)}${i===id?' (you)':''}</b>${help?'<span class="chip warn">Could use a hand</span>':''}</div><div class="mut">${esc(x.barangay||'')} · ${p} points</div>${i!==id?`<div class="row">${x.contactNumber?`<a href="tel:${esc(x.contactNumber)}">${esc(x.contactNumber)}</a>`:''}${x.masterEmail?`<a href="mailto:${esc(x.masterEmail)}">${esc(x.masterEmail)}</a>`:''}</div>`:''}</div>`}).join('')}</div>`}
-const PODS={'Mon AM':'H01 H10 H14 H15 H18 H30','Wed PM':'H02 H04 H28','Thu AM':'H24 H34','Thu PM':'H16 H21','Fri AM':'H17','Sat AM A':'H05 H06 H07 H09','Sat AM B':'H11 H12 H27 H31','Sun AM':'H20 H23 H29 H36','Sun PM':'H22 H33 H35'};
+  const ids=Object.keys(S.podHh).sort(natCmp),inc=incoming(),R=S.cfg.roles||[],myW=winById(me.window),cSh=S.myContact?.shared===true,pSh=S.myPp?.shown===true;
+  const myC=S.myContact||{},ph=myC.contactNumber||me.contactNumber||'',em=myC.masterEmail||me.masterEmail||'';
+  const wins=(S.cfg.windows||[]).filter(w=>String(w.pod)===String(pod)).sort(wSort),roleRows=R.map(r=>({r,k:r.id+'_'+pod,h:S.holders[r.id+'_'+pod]})).filter(x=>x.h);
+  const nm=i=>esc(S.podHh[i]?.name||i);
+  const incCard=inc.length?`<div class="card" style="border-left:4px solid var(--pend)"><h2>${inc.length} request${inc.length>1?'s':''} for you</h2>${inc.map(reqCard).join('')}</div>`:'';
+  const privacy=`<div class="card"><h2>Your privacy</h2>
+   <div class="log"><div class="row sp"><b>Contact details</b><span class="chip ${cSh?'approved':'nopod'}">${cSh?'Shared with pod':'Not shared'}</span></div>
+   <p class="mut" style="margin:6px 0 10px">${ph||em?`Phone: ${esc(ph||'\u2014')}<br>Email: ${esc(em||'\u2014')}`:'No contact details on file yet. Add your phone or email so podmates can reach you.'}</p>
+   <div class="row"><button class="sm ghost" onclick="A.contactModal()">${ph||em?'Edit details':'Add my details'}</button>${ph||em?`<button class="sm${cSh?' ghost':''}" onclick="A.shareContact(${!cSh})">${cSh?'Stop sharing':'Share with my pod'}</button>`:''}</div></div>
+   <div class="log"><div class="row sp"><b>Points</b><span class="chip ${pSh?'approved':'nopod'}">${pSh?'Shown to pod':'Hidden'}</span></div><p class="mut" style="margin:6px 0 10px">${pSh?'Your podmates can see your points.':'Your points are hidden from your podmates.'} Podmates cannot ask you to show them.</p><button class="sm${pSh?' ghost':''}" onclick="A.sharePoints(${!pSh})">${pSh?'Hide my points':'Show my points to my pod'}</button></div></div>`;
+  const rolesCard=roleRows.length?`<div class="card"><h2>Roles in your pod</h2>${roleRows.map(({r,k,h})=>{const mine=h.hhId===id,offers=mine?S.reqFrom.filter(q=>q.type==='role'&&q.assignId===k):[];
+    return `<div class="log"><div class="row sp"><div><b>${esc(r.name)}</b>${r.desc?`<div class="mut">${esc(r.desc)}</div>`:''}</div><span class="chip role">${nm(h.hhId)}${mine?' (you)':''}</span></div>${offers.map(q=>`<div class="row sp mut" style="margin-top:6px"><span>${q.status==='pending'?'Waiting for '+nm(q.toHh)+' to accept':nm(q.toHh)+' declined'}</span><button class="text" onclick="A.cancelReq('${q.id}')">${q.status==='pending'?'Cancel':'Dismiss'}</button></div>`).join('')}${mine?`<div style="margin-top:8px"><button class="sm ghost" onclick="A.passRoleModal('${k}')">Pass this role\u2026</button></div>`:''}</div>`}).join('')}</div>`:'';
+  const winCard=wins.length?`<div class="card"><h2>When your pod meets</h2>${wins.map(w=>{const ms=ids.filter(i=>S.podHh[i].window===w.id);return `<div class="log"><div class="row sp"><b>${esc(winLabel(w))}</b>${me.window===w.id?'<span class="chip approved">Your window</span>':''}</div><div class="mut">${ms.length?ms.map(i=>nm(i)+(i===id?' (you)':'')).join(', '):'No households yet'}</div></div>`}).join('')}</div>`:'';
+  const cb=i=>{if(i===id)return'';const c=S.podContacts[i];
+    if(c)return `<div class="row" style="margin-top:6px">${c.contactNumber?`<a href="tel:${esc(c.contactNumber)}">${esc(c.contactNumber)}</a>`:''}${c.masterEmail?`<a href="mailto:${esc(c.masterEmail)}">${esc(c.masterEmail)}</a>`:''}</div>`;
+    const q=S.reqFrom.find(x=>x.id==='contact_'+id+'_'+i),pend=q&&q.status==='pending',dec=q&&q.status==='declined';
+    return `<div class="lock" style="margin-top:8px"><div class="mut">Contact details not shared.</div>${pend?`<div class="row sp" style="margin-top:4px"><span class="chip pending">Request sent</span><button class="text" onclick="A.cancelReq('${q.id}')">Cancel</button></div>`:`<div class="row sp" style="margin-top:4px">${dec?'<span class="mut">They are not sharing right now.</span>':'<span></span>'}<button class="sm ghost" onclick="A.askContact('${i}')">${dec?'Request again':'Ask them to share'}</button></div>`}</div>`};
+  const rows=ids.map(i=>{const x=S.podHh[i],self=i===id,p=self?pts(i):S.podPts[i]?.points,help=p!=null&&standing(x,p)[1]==='voided',wc=winChip(x);
+    return `<div class="log"><div class="row sp"><b>${esc(x.name)}${self?' (you)':''} <span class="mut" style="font-weight:400">${i}</span></b>${help?'<span class="chip warn">Could use a hand</span>':''}</div>${(roleChips(i)||wc)?`<div class="row" style="gap:6px;margin:4px 0">${roleChips(i)}${wc}</div>`:''}<div class="mut">${esc(x.barangay||'')} \u00b7 ${p!=null?p+' points':'Points hidden'}</div><div class="row" style="gap:6px;margin-top:6px">${availChips(x.availability)}</div>${cb(i)}</div>`}).join('');
+  $('#app').innerHTML=`<div class="card"><h2>${esc(podLabel(pod))}</h2><p class="mut" style="margin:0">${myW?'Your window: <b>'+esc(winLabel(myW))+'</b>. ':''}Only people in your pod can see this. Use it to coordinate and help each other.</p></div>${incCard}${privacy}${rolesCard}${winCard}${glance(ids,S.podHh,true)}<div class="card"><h2>Podmates</h2>${rows}</div>`}
+async function runBatch(fns){for(let i=0;i<fns.length;i+=400){const b=writeBatch(db);fns.slice(i,i+400).forEach(f=>f(b));await b.commit()}}
+async function assignPod(map){const ops=[];
+  for(const [id,pod] of Object.entries(map)){const moved=String(S.hh[id]?.pod||'')!==String(pod);
+    ops.push(b=>b.update(doc(db,'households',id),moved?{pod:pod?pod:deleteField(),window:deleteField()}:{pod:pod?pod:deleteField()}));
+    if(moved){if(S.contacts[id])ops.push(b=>b.update(doc(db,'contacts',id),{pod,shared:false}));
+      if(S.pp[id])ops.push(b=>b.update(doc(db,'podpoints',id),{pod,shown:false}));
+      Object.entries(S.holders).filter(([k,v])=>v.hhId===id&&String(v.pod)!==String(pod)).forEach(([k])=>ops.push(b=>b.delete(doc(db,'roleHolders',k))))}}
+  await runBatch(ops)}
+const regPods=async l=>{const t=new Set([...(S.cfg.pods||[]),...l].map(String));await setDoc(doc(db,'config','program'),{pods:[...t].sort((a,b)=>a-b)},{merge:true})};
+
 const loc=iso=>{const d=new Date(iso);return `${ymd(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`};
 Object.assign(A,{
  cancelIn:guard(async()=>{await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:null});toast('Cancelled')}),
- setPod:guard(async(id,v)=>{await updateDoc(doc(db,'households',id),{pod:v.trim()});toast('Pod saved')}),
- seedPods:guard(async()=>{if(!confirm('Set pods from the Ugnayan Gulayan window table? This overwrites current pods.'))return;const b=writeBatch(db);let n=0;
-   for(const [pod,l] of Object.entries(PODS))l.split(' ').forEach(id=>{if(S.hh[id]){b.update(doc(db,'households',id),{pod});n++}});await b.commit();toast(n+' households placed')}),
+ setPod:guard(async(id,v)=>{v=String(v||'').trim();await assignPod({[id]:v});toast(v?'Moved to '+podLabel(v):'Removed from pod')}),
+ addPod:guard(async()=>{const L=podNums().map(Number),n=String((L.length?Math.max(...L):0)+1);S.open.pods=true;S.open['pod'+n]=true;await regPods([n]);toast('Pod '+n+' added')}),
+ savePod:guard(async n=>{document.activeElement?.blur?.();
+   const raw=($('#pt'+n)?.value??'').split(/[\s,;]+/).map(t=>t.trim()).filter(Boolean);
+   const norm=t=>{const u=t.toUpperCase();if(S.hh[u])return u;const m=/^H?0*(\d+)$/.exec(u);if(m)for(const c of['H'+pad(m[1]),'H'+m[1]])if(S.hh[c])return c;return null};
+   const ids=[],bad=[];raw.forEach(t=>{const id=norm(t);if(!id)bad.push(t);else if(!ids.includes(id))ids.push(id)});
+   if(bad.length)return toast('Not found: '+bad.join(', ')+'. Check the IDs.');
+   const cur=Object.keys(S.hh).filter(i=>String(S.hh[i].pod||'')===n),add=ids.filter(i=>!cur.includes(i)),rem=cur.filter(i=>!ids.includes(i));
+   if(!add.length&&!rem.length){delete S.podDraft[n];A.r();return toast('No changes to save')}
+   const mv=add.filter(i=>S.hh[i].pod);
+   if(mv.length&&!confirm(mv.map(i=>i+' is in '+podLabel(S.hh[i].pod)).join('\n')+'\n\nMove '+(mv.length>1?'them':'it')+' to Pod '+n+'?'))return;
+   const map={};add.forEach(i=>map[i]=n);rem.forEach(i=>map[i]='');
+   await assignPod(map);delete S.podDraft[n];toast('Pod '+n+' saved'+(add.length?' \u00b7 '+add.length+' added':'')+(rem.length?' \u00b7 '+rem.length+' removed':''))}),
+ delPod:guard(async n=>{const ms=Object.keys(S.hh).filter(i=>String(S.hh[i].pod||'')===n);
+   if(!confirm('Delete Pod '+n+'?'+(ms.length?'\n'+ms.length+' household(s) will be left without a pod.':'')))return;
+   const map={};ms.forEach(i=>map[i]='');await assignPod(map);
+   await setDoc(doc(db,'config','program'),{pods:(S.cfg.pods||[]).map(String).filter(p=>p!==n)},{merge:true});delete S.podDraft[n];toast('Pod '+n+' deleted')}),
+ toggleSlot:async(id,btn)=>{btn.classList.toggle('on');btn.setAttribute('aria-pressed',btn.classList.contains('on'));
+   const av=[...btn.parentElement.querySelectorAll('.slot.on')].map(b=>b.dataset.k);
+   try{await updateDoc(doc(db,'households',id),{availability:av})}catch(e){console.error(e);btn.classList.toggle('on');btn.setAttribute('aria-pressed',btn.classList.contains('on'));toast('Could not save: '+(e.code||e.message))}},
  saveCfg2:guard(async()=>{let terms=(S.td||S.cfg.terms||[]).map((t,i)=>({name:String(t.name||'').trim()||'Term '+(i+1),end:t.end||'',pct:+t.pct||0}));
    const dated=terms.every(t=>t.end);
    if(terms.some(t=>t.end&&!(t.pct>0&&t.pct<=100)))return toast('A term with an end date needs a % from 1 to 100');
    if(dated)terms=terms.sort((a,b)=>a.end>b.end?1:-1);
    if(dated&&terms.length&&terms[terms.length-1].pct!==100&&!confirm('The last term is not 100% of the target. Save anyway?'))return;
-   await setDoc(doc(db,'config','program'),{clockOpen:$('#cO').value,clockClose:$('#cC').value,maxShiftHours:+$('#cM').value,yearStart:$('#yS').value,terms,slidesUrl:$('#sU').value.trim()},{merge:true});S.td=null;A.r();toast('Saved')}),
- editModal(id){const a=S.att.find(x=>x.id===id);open_(`<h2>Edit log · ${esc(hhName(a.hhId))}</h2><p class="mut">Correct this to the real time they arrived and left.</p><label>Time in</label><input id="eI" type="datetime-local" value="${loc(a.timeIn)}"><label>Time out</label><input id="eO" type="datetime-local" value="${loc(a.timeOut)}"><label>Note</label><input id="eN" value="${esc(a.note)}"><div class="row" style="margin-top:14px"><button onclick="A.saveEdit('${id}')">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
+   await setDoc(doc(db,'config','program'),{clockOpen:$('#cO').value,clockClose:$('#cC').value,maxShiftHours:+$('#cM').value,terms,slidesUrl:$('#sU').value.trim()},{merge:true});S.td=null;A.r();toast('Saved')}),
+ editModal(id){const a=S.att.find(x=>x.id===id);open_(`<h2>Edit log · ${esc(hhName(a.hhId))}</h2><p class="mut">Correct this to the real time they arrived and left.</p><label>Time in</label><input id="eI" type="datetime-local" value="${loc(a.timeIn)}"><label>Time out</label><input id="eO" type="datetime-local" value="${loc(a.timeOut)}"><label>Note</label><input id="eN" value="${esc(a.note)}"><label>People who worked, including the parent (+${S.cfg.guestPoints} per extra person)</label><input id="eG" type="number" min="1" max="${S.cfg.maxGuests+1}" inputmode="numeric" value="${(a.guests||0)+1}"><div class="row" style="margin-top:14px"><button onclick="A.saveEdit('${id}')">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
  saveEdit:guard(async id=>{const l=S.att.find(x=>x.id===id),i=new Date($('#eI').value),o=new Date($('#eO').value);if(isNaN(i)||isNaN(o)||o<=i)return toast('Time out must be after time in');
    const dur=Math.round((o-i)/36e3)/100;let p=0;if(l.status==='approved'){p=dur>=2?S.cfg.pointsPerDay:0;if(S.att.some(x=>x.id!==id&&x.hhId===l.hhId&&x.date===ymd(i)&&x.status==='approved'&&x.points>0))p=0}
-   await updateDoc(doc(db,'attendance',id),{date:ymd(i),timeIn:i.toISOString(),timeOut:o.toISOString(),durationHours:dur,note:$('#eN').value.trim(),points:p,autoClosed:false,editedBy:S.user.email});A.close();toast('Log updated')}),
+   const g=Math.min(Math.max((+$('#eG').value||1)-1,0),S.cfg.maxGuests);if(p>0)p+=g*S.cfg.guestPoints;
+   await updateDoc(doc(db,'attendance',id),{date:ymd(i),timeIn:i.toISOString(),timeOut:o.toISOString(),durationHours:dur,note:$('#eN').value.trim(),guests:g,points:p,autoClosed:false,editedBy:S.user.email});A.close();toast('Log updated')}),
  buyoutModal(pre=''){const ids=Object.keys(S.hh).sort();open_(`<h2>Record a buy-out</h2><p class="mut">For households who gave materials, skills or services instead of a farm day. It does not add points.</p><label>Household</label><select id="bH">${ids.map(i=>`<option value="${i}"${i===pre?' selected':''}>${i} · ${esc(S.hh[i].name)}</option>`).join('')}</select><label>Date</label><input id="bD" type="date" value="${ymd(new Date())}"><label>What was given or done</label><input id="bI" placeholder="e.g. 20 kg compost, harvest delivery"><label>Work days it covers</label><input id="bN" type="number" step="0.5" value="1"><div class="row" style="margin-top:14px"><button onclick="A.saveBuyout()">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
  saveBuyout:guard(async()=>{const hh=$('#bH').value,it=$('#bI').value.trim(),d=$('#bD').value;if(!it||!d)return toast('Add the date and what was given');const t=new Date(d+'T12:00').toISOString();
    await addDoc(collection(db,'attendance'),{hhId:hh,pod:S.hh[hh]?.pod||'',date:d,kind:'buyout',item:it,days:+$('#bN').value,timeIn:t,timeOut:t,durationHours:0,note:it,status:'approved',points:0,loggedBy:S.user.uid,approvedBy:S.user.email});A.close();toast('Buy-out recorded')})
@@ -326,7 +503,277 @@ Object.assign(A,{
  delTerm:i=>{S.td.splice(i,1);redrawTerms()},
  evenTerms:()=>{termsHtml();const n=S.td.length;S.td.forEach((t,i)=>t.pct=Math.round(100*(i+1)/n));redrawTerms()}
 });
-const ADM=['addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','seedPods','setTarget','setPod','delLog','userDel'],STF=['approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
+const ndt=d=>{const x=new Date(d+'T00:00');x.setDate(x.getDate()+1);return ymd(x)},plusYr=d=>{const[y,m,k]=d.split('-');return `${+y+1}-${m}-${k}`};
+const annual=(h,p)=>{const t=target(h),mid=h?.targetType==='adjusted'?S.cfg.onTrackAdjusted:S.cfg.onTrackStandard;return p>=t?'In Good Standing':p>=mid?'On Track':'Needs Support'};
+const r2=n=>Math.round(n*100)/100;
+function yearRows(a,b){return Object.keys(S.hh).sort().map(id=>{const h=S.hh[id],L=S.att.filter(x=>x.hhId===id&&inRange(x.date,a,b)),ap=L.filter(x=>x.status==='approved'),w=ap.filter(x=>x.kind!=='buyout'),p=ap.reduce((q,x)=>q+(x.points||0),0),by=ap.filter(x=>x.kind==='buyout');
+  return{id,name:h.name||'',barangay:h.barangay||'',pod:h.pod||'',targetType:h.targetType==='adjusted'?'adjusted':'standard',target:target(h),points:p,workDays:w.filter(x=>x.points>0).length,hours:r2(w.reduce((q,x)=>q+(x.durationHours||0),0)),guests:w.reduce((q,x)=>q+(+x.guests||0),0),buyouts:by.length,buyoutDays:by.reduce((q,x)=>q+(+x.days||0),0),pending:L.filter(x=>x.status==='pending').length,voided:L.filter(x=>x.status==='voided').length,standing:annual(h,p)}})}
+const summarize=rs=>{const sum=k=>rs.reduce((q,r)=>q+r[k],0),n=rs.length;return{households:n,active:rs.filter(r=>r.workDays>0).length,points:sum('points'),avg:n?r2(sum('points')/n):0,workDays:sum('workDays'),hours:r2(sum('hours')),buyouts:sum('buyouts'),pending:sum('pending'),good:rs.filter(r=>r.standing==='In Good Standing').length,onTrack:rs.filter(r=>r.standing==='On Track').length,needs:rs.filter(r=>r.standing==='Needs Support').length}};
+const kpi=sm=>`<div class="kpi"><div><b>${sm.points}</b>points earned</div><div><b>${sm.workDays}</b>work days</div><div><b>${sm.hours}</b>hours worked</div><div><b>${sm.active}/${sm.households}</b>households took part</div></div><div class="row" style="margin:10px 0"><span class="chip approved">${sm.good} In Good Standing</span><span class="chip pending">${sm.onTrack} On Track</span><span class="chip voided">${sm.needs} Needs Support</span></div>${sm.pending?`<p class="mut">\u26a0 ${sm.pending} log(s) are still pending and not counted.</p>`:''}`;
+const nextLabel=()=>{const m=/(\d{4})-(\d{4})/.exec(S.cfg.currentYear||'');const y=m?+m[2]:new Date().getFullYear();return `${y}-${y+1}`};
+const lastEvt=()=>[...S.events].filter(e=>!e.undone).sort((a,b)=>b.at-a.at)[0];
+const snap=()=>({currentYear:S.cfg.currentYear||'',yearStart:S.cfg.yearStart||'',yearEnd:S.cfg.yearEnd||'',pastYears:S.cfg.pastYears||[],terms:S.cfg.terms||[]});
+function yearBanner(){return yearOver()?`<div class="card"><b>The ${yLabel(S.cfg.currentYear)} year has ended.</b><p class="mut" style="margin:4px 0 0">Thank you for your work. The new year will start soon.</p></div>`:''}
+function pastHtml(id){const L=(S.cfg.pastYears||[]).filter(y=>y.id!==S.cfg.currentYear);if(!L.length)return'';
+  return `<div class="card"><h2>Previous years</h2>${L.slice().reverse().map(y=>`<div class="log row sp"><b>${yLabel(y.id)}</b><span>${S.att.filter(a=>a.hhId===id&&a.status==='approved'&&inRange(a.date,y.start,y.end)).reduce((q,a)=>q+(a.points||0),0)} points</span></div>`).join('')}</div>`}
+function yearsView(){const c=S.cfg,cur=c.currentYear,open=cur&&!c.yearEnd,ev=lastEvt();
+  const sm=summarize(yearRows(c.yearStart,c.yearEnd)),ys=[...S.years].sort((a,b)=>a.id<b.id?1:-1);
+  return `<div class="card"><div class="row sp"><div><div class="mut">Program year</div><h2 style="margin:0;font-size:26px">${cur?yLabel(cur):'Not started'}</h2><div class="mut">${cur?(open?'Open since ':'Ended ')+fmtD(open?c.yearStart:c.yearEnd):'Start your first year to begin counting.'}</div></div><span class="chip ${open?'approved':'pending'}">${open?'Open':cur?'Ended':'None'}</span></div>
+  ${cur?kpi(sm):''}<div class="row">${cur?`<button class="ghost" onclick="A.exportYear('${cur}')">Export Excel</button><button class="ghost" onclick="A.editYearModal()">Edit year</button>`:''}${open?`<button class="red" onclick="A.endYearModal()">End year\u2026</button>`:`<button onclick="A.startYearModal()">Start ${cur?'next':'first'} year\u2026</button>`}</div></div>
+  ${ev?`<div class="card" style="border-left:4px solid var(--pend)"><div class="row sp"><div><b>Last change: ${ev.type==='end'?'Ended':'Started'} ${yLabel(ev.year)}</b><div class="mut">${new Date(ev.at).toLocaleString()} by ${esc(ev.by)}</div></div><button class="ghost" onclick="A.undoLast()">Undo</button></div></div>`:''}
+  <div class="card"><h2>All years</h2>${ys.length?ys.map(y=>`<div class="log row sp"><div><b>${yLabel(y.id)}</b><div class="mut">${fmtD(y.start)} \u2013 ${y.end?fmtD(y.end):'open'}${y.summary?' \u00b7 '+y.summary.points+' points':''}</div></div><button class="ghost sm" onclick="A.exportYear('${y.id}')">Export</button></div>`).join(''):'<p class="mut">No years saved yet.</p>'}</div>`}
+const endPrev=()=>{const c=S.cfg,e=$('#yE').value||ymd(new Date()),sm=summarize(yearRows(c.yearStart,e));$('#yP').innerHTML=kpi(sm)+(sm.pending?`<label class="row" style="color:var(--txt);font-size:14px"><input id="yK" type="checkbox" style="width:24px;min-height:24px"> I understand pending logs won't be counted</label>`:'')};
+Object.assign(A,{
+ exportXlsx:()=>A.exportYear(S.cfg.currentYear),
+ endPreview:endPrev,
+ endYearModal(){const c=S.cfg;if(!c.currentYear||c.yearEnd)return toast('There is no open year to end');
+  open_(`<h2>End ${yLabel(c.currentYear)}?</h2><p class="mut">This saves a summary and closes the year. No logs are deleted, and you can undo it from the Years tab.</p><label>Last day of the year</label><input id="yE" type="date" min="${c.yearStart}" value="${ymd(new Date())}" onchange="A.endPreview()"><div id="yP" style="margin-top:12px"></div><div class="row" style="margin-top:14px"><button class="red" onclick="A.endYear()">End year</button><button class="ghost" onclick="A.close()">Cancel</button></div>`);endPrev()},
+ endYear:guard(async()=>{const c=S.cfg,id=c.currentYear,end=$('#yE').value;if(!end||end<c.yearStart)return toast('Pick a valid last day');
+  const rows=yearRows(c.yearStart,end),sm=summarize(rows);if(sm.pending&&!$('#yK')?.checked)return toast('Tick the box to continue');
+  const b=writeBatch(db),by=S.user.email,past=[...(c.pastYears||[]).filter(y=>y.id!==id),{id,start:c.yearStart,end}];
+  b.set(doc(db,'years',id),{id,label:yLabel(id),start:c.yearStart,end,status:'closed',closedAt:Date.now(),closedBy:by,rows,summary:sm});
+  b.set(doc(db,'config','program'),{yearEnd:end,pastYears:past},{merge:true});
+  b.set(doc(collection(db,'yearEvents')),{type:'end',year:id,at:Date.now(),by,before:snap(),undone:false});
+  await b.commit();A.close();toast('Year ended. You can undo this.')}),
+ editYearModal(){const c=S.cfg;
+  open_(`<h2>Edit program year</h2>
+    <p class="mut">A log counts only when its date falls between the first day and the last day. Change the dates here to bring logs into the year.</p>
+    <label>Year label</label><input id="eyL" value="${esc(c.currentYear||'')}" placeholder="2026-2027">
+    <label>First day — logs on or after this date count</label><input id="eyS" type="date" value="${esc(c.yearStart||'')}">
+    <label>Last day — leave blank for an open year</label><input id="eyE" type="date" value="${esc(c.yearEnd||'')}">
+    <p class="mut" style="margin-top:10px">Clearing the last day reopens the year. This edit does <b>not</b> save a snapshot of the standings — use <b>End year</b> for that.</p>
+    <div class="row" style="margin-top:14px"><button onclick="A.saveYear()">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
+ saveYear:guard(async()=>{
+  const id=$('#eyL').value.trim(),st=$('#eyS').value,en=$('#eyE').value,c=S.cfg;
+  if(!/^\d{4}-\d{4}$/.test(id))return toast('Write the year like 2026-2027');
+  if(!st)return toast('Set the first day');
+  if(en&&en<st)return toast('The last day must be after the first day');
+  if(id!==c.currentYear&&(c.pastYears||[]).some(y=>y.id===id))return toast('A past year already uses that label');
+  const patch={currentYear:id,yearStart:st,yearEnd:en||''};
+  const oldId=c.currentYear;
+  if(oldId&&(c.pastYears||[]).some(y=>y.id===oldId)){
+    patch.pastYears=(c.pastYears||[]).map(y=>y.id===oldId?{...y,id,start:st,end:en||''}:y);
+  }
+  const b=writeBatch(db);
+  b.set(doc(db,'config','program'),patch,{merge:true});
+  if(oldId&&oldId!==id){
+    const old=S.years.find(y=>y.id===oldId);
+    if(old){b.delete(doc(db,'years',oldId));b.set(doc(db,'years',id),{...old,id,label:yLabel(id),start:st,end:en||'',status:en?'closed':'open'})}
+  }else if(S.years.some(y=>y.id===id)){
+    b.update(doc(db,'years',id),{start:st,end:en||'',status:en?'closed':'open'});
+  }
+  await b.commit();A.close();toast('Year updated')
+ }),
+ startYearModal(){const c=S.cfg;if(c.currentYear&&!c.yearEnd)return toast('End the current year first');
+  const st=c.yearEnd?ndt(c.yearEnd):(c.yearStart||ymd(new Date())),hasT=c.currentYear&&(c.terms||[]).some(t=>t.end);
+  open_(`<h2>Start a new year</h2><p class="mut">Points start again at 0. Households, pods and target types carry over. Past years stay saved and exportable.</p><label>Year</label><input id="yL" value="${nextLabel()}" placeholder="2027-2028"><label>First day</label><input id="yS2" type="date" value="${st}">${hasT?`<label class="row" style="color:var(--txt);font-size:14px"><input id="yT" type="checkbox" checked style="width:24px;min-height:24px"> Move term end dates forward one year</label>`:''}<div class="row" style="margin-top:14px"><button onclick="A.startYear()">Start year</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
+ startYear:guard(async()=>{const c=S.cfg,id=$('#yL').value.trim(),st=$('#yS2').value;
+  if(!/^\d{4}-\d{4}$/.test(id))return toast('Write the year like 2027-2028');if(!st||(c.yearEnd&&st<=c.yearEnd))return toast('The first day must be after the last year ended');
+  if(S.years.some(y=>y.id===id))return toast('That year already exists');
+  const terms=$('#yT')?.checked?(c.terms||[]).map(t=>({...t,end:t.end?plusYr(t.end):''})):(c.terms||[]),b=writeBatch(db),by=S.user.email;
+  b.set(doc(db,'years',id),{id,label:yLabel(id),start:st,status:'open',startedAt:Date.now(),startedBy:by});
+  b.set(doc(db,'config','program'),{currentYear:id,yearStart:st,yearEnd:'',terms},{merge:true});
+  b.set(doc(collection(db,'yearEvents')),{type:'start',year:id,at:Date.now(),by,before:snap(),undone:false});
+  await b.commit();S.td=null;A.close();toast('Year started. You can undo this.')}),
+ undoLast:guard(async()=>{const e=lastEvt();if(!e)return;if(!confirm(`Undo "${e.type==='end'?'Ended':'Started'} ${yLabel(e.year)}"? The year and points go back to how they were.`))return;
+  const b=writeBatch(db);b.set(doc(db,'config','program'),{currentYear:e.before.currentYear,yearStart:e.before.yearStart,yearEnd:e.before.yearEnd,pastYears:e.before.pastYears,terms:e.before.terms},{merge:true});
+  if(e.type==='start')b.delete(doc(db,'years',e.year));else b.set(doc(db,'years',e.year),{id:e.year,label:yLabel(e.year),start:e.before.yearStart,status:'open',reopenedAt:Date.now()});
+  b.update(doc(db,'yearEvents',e.id),{undone:true,undoneAt:Date.now(),undoneBy:S.user.email});await b.commit();S.td=null;toast('Undone')}),
+ exportYear:guard(id=>{const c=S.cfg,y=S.years.find(x=>x.id===id),cur=id&&id===c.currentYear,st=y?.start||(cur?c.yearStart:''),en=y?.end||(cur?c.yearEnd:'');
+  const closed=y&&y.status==='closed'&&y.rows&&!cur,rows=closed?y.rows:yearRows(st,en),sm=closed?y.summary:summarize(rows);
+  const L=S.att.filter(a=>inRange(a.date,st,en)).sort((a,b)=>a.timeIn>b.timeIn?1:-1);
+  const info=[['Program year',id?yLabel(id):'All time'],['Status',closed?'Closed':'Open'],['First day',st||''],['Last day',en||'(open)'],['Exported',new Date().toLocaleString()],[],['Households',sm.households],['Households with at least one work day',sm.active],['Total points',sm.points],['Average points per household',sm.avg],['Work days approved',sm.workDays],['Hours worked',sm.hours],['Buy-out entries',sm.buyouts],['Logs still pending',sm.pending],[],['In Good Standing',sm.good],['On Track',sm.onTrack],['Needs Support',sm.needs]];
+  const wb=XLSX.utils.book_new(),s1=XLSX.utils.aoa_to_sheet(info);s1['!cols']=[{wch:38},{wch:22}];XLSX.utils.book_append_sheet(wb,s1,'Year Summary');
+  const s2=XLSX.utils.json_to_sheet(rows.map(r=>({'Household ID':r.id,Name:r.name,Barangay:r.barangay,Pod:r.pod,'Target type':r.targetType,Target:r.target,Points:r.points,'Work days':r.workDays,Hours:r.hours,Guests:r.guests??'','Buy-outs':r.buyouts,'Buy-out days':r.buyoutDays,Pending:r.pending,Voided:r.voided,Standing:r.standing})));s2['!cols']=Array(14).fill({wch:14});XLSX.utils.book_append_sheet(wb,s2,'Household Summary');
+  const s3=XLSX.utils.json_to_sheet(L.map(a=>({Type:a.kind||'work',Date:a.date,'Household ID':a.hhId,Pod:a.pod||'','Time In':fmtT(a.timeIn),'Time Out':fmtT(a.timeOut),Hours:a.durationHours||0,Guests:a.guests||0,Note:a.note||'',Points:a.points||0,Status:a.status,'Approved by':a.approvedBy||''})));s3['!cols']=Array(11).fill({wch:14});XLSX.utils.book_append_sheet(wb,s3,'Attendance Logs');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S.harv.filter(h=>inRange(h.date,st,en)).map(h=>({Date:h.date,Crop:h.crop,Amount:h.qty,Unit:h.unit,Destination:HDEST[h.dest]||h.dest,'Household ID':h.hhId||'',Notes:h.note||''}))),'Harvests');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S.plant.filter(p=>p.status!=='pending'&&inRange(p.date,st,en)).map(p=>({Date:p.date,'Household ID':p.hhId,Crop:p.crop||'',Count:p.qty??'',Notes:p.note||''}))),'Plantings');
+  XLSX.writeFile(wb,`ugnayan-gulayan-${id||'all'}.xlsx`)})
+});
+const uid=()=>Math.random().toString(36).slice(2,8);
+function md(src){const E=t=>t.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const inl=t=>E(t).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<i>$2</i>').replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  const out=[];let list=null,para=[];const flush=()=>{if(para.length){out.push('<p>'+inl(para.join(' '))+'</p>');para=[]}},endL=()=>{if(list){out.push('</'+list+'>');list=null}};
+  for(const raw of String(src||'').split('\n')){const l=raw.trimEnd();let m;
+    if(!l.trim()){flush();endL();continue}
+    if(m=/^(#{1,3})\s+(.*)$/.exec(l)){flush();endL();out.push('<h'+(m[1].length+1)+'>'+inl(m[2])+'</h'+(m[1].length+1)+'>')}
+    else if(/^(-{3,}|\*{3,})$/.test(l.trim())){flush();endL();out.push('<hr>')}
+    else if(m=/^\s*[-*]\s+(.*)$/.exec(l)){flush();if(list!=='ul'){endL();out.push('<ul>');list='ul'}out.push('<li>'+inl(m[1])+'</li>')}
+    else if(m=/^\s*\d+[.)]\s+(.*)$/.exec(l)){flush();if(list!=='ol'){endL();out.push('<ol>');list='ol'}out.push('<li>'+inl(m[1])+'</li>')}
+    else if(m=/^>\s?(.*)$/.exec(l)){flush();endL();out.push('<blockquote>'+inl(m[1])+'</blockquote>')}
+    else{endL();para.push(l.trim())}}
+  flush();endL();return out.join('')}
+function programHtml(bl){return bl.length?bl.map(b=>{const u=b.type==='slides'?slideEmbed(b.url):'';
+  return `<div class="card">${b.title?`<h2>${esc(b.title)}</h2>`:''}${u?`<div style="position:relative;padding-top:56.25%;border-radius:8px;overflow:hidden"><iframe src="${esc(u)}" style="position:absolute;inset:0;width:100%;height:100%;border:0" allowfullscreen title="${esc(b.title||'Slides')}"></iframe></div><p><a href="${esc(b.url)}" target="_blank" rel="noopener">Open in Google Slides</a></p>`:''}${b.md?`<div class="md">${md(b.md)}</div>`:''}</div>`}).join(''):'<div class="card"><p class="mut">Nothing has been added yet.</p></div>'}
+function initBlocks(){return JSON.parse(JSON.stringify(S.cfg.programBlocks??(S.cfg.slidesUrl?[{id:uid(),type:'slides',title:'About the program',url:S.cfg.slidesUrl,md:''}]:[]))).map(b=>({id:b.id||uid(),type:b.type,title:b.title||'',url:b.url||'',md:b.md||''}))}
+function blocksHtml(){S.pb??=initBlocks();const bt='style="padding:0 14px"';
+  return S.pb.map((b,i)=>`<div class="blk" data-i="${i}" data-id="${b.id}"><div class="row" style="flex-wrap:nowrap;gap:4px"><span class="grip" data-grip role="button" aria-label="Drag to reorder">\u2807</span><span class="chip ${b.type==='slides'?'approved':'pending'}">${b.type==='slides'?'Slides':'Text'}</span><span class="grow"></span><button class="ghost sm" ${bt} aria-label="Move up" onclick="A.moveBlk(${i},-1)">\u25b2</button><button class="ghost sm" ${bt} aria-label="Move down" onclick="A.moveBlk(${i},1)">\u25bc</button><button class="ghost sm" ${bt} aria-label="Delete block" onclick="A.delBlk(${i})">\u2715</button></div>
+  <label>Title (optional)</label><input value="${esc(b.title)}" oninput="A.setBlk(${i},'title',this.value)">
+  ${b.type==='slides'?`<label>Google Slides link</label><input value="${esc(b.url)}" inputmode="url" placeholder="https://docs.google.com/presentation/d/..." oninput="A.setBlk(${i},'url',this.value)">`:''}
+  <label>${b.type==='slides'?'Description (Markdown, optional)':'Text (Markdown)'}</label><textarea rows="${b.type==='slides'?3:6}" oninput="A.setBlk(${i},'md',this.value)">${esc(b.md)}</textarea></div>`).join('')||'<p class="mut">No blocks yet. Add slides or text below.</p>'}
+const redrawBlk=()=>{const b=$('#blkBox');if(b)b.innerHTML=blocksHtml()};
+const pan=(k,t,sub,body)=>`<details class="panel" ${S.open[k]?'open':''} ontoggle="S_.open['${k}']=this.open"><summary><span><b>${t}</b><small>${sub}</small></span><i>\u25be</i></summary><div class="pbody">${body}</div></details>`;
+function settingsHtml(){const c=S.cfg,nb=(S.pb||initBlocks()).length;
+  return pan('year','Program year',c.currentYear?yLabel(c.currentYear)+(c.yearEnd?' \u00b7 ended':' \u00b7 open'):'Not started',yearsView())
+  +pan('targets','Points and targets','Standard '+c.targetStandard+' \u00b7 Adjusted '+c.targetAdjusted,`<label>Standard target (points)</label><input id="tS" type="number" inputmode="numeric" value="${c.targetStandard}"><label>Adjusted target (points)</label><input id="tA" type="number" inputmode="numeric" value="${c.targetAdjusted}"><label>Points per work day</label><input id="tP" type="number" inputmode="numeric" value="${c.pointsPerDay}"><label>Bonus points per extra person</label><input id="tG" type="number" inputmode="numeric" value="${c.guestPoints}"><label>Most extra people that earn a bonus per day (beyond the first)</label><input id="tM" type="number" inputmode="numeric" value="${c.maxGuests}"><label>On Track from (standard / adjusted)</label><div class="row" style="flex-wrap:nowrap"><input id="oS" type="number" inputmode="numeric" value="${c.onTrackStandard}"><input id="oA" type="number" inputmode="numeric" value="${c.onTrackAdjusted}"></div><div style="margin-top:14px"><button onclick="A.saveCfg()">Save</button></div>`)
+  +pan('clock','Clock-in',c.clockOpen+' to '+c.clockClose,`<label>Clock-in opens</label><input id="cO" type="time" value="${c.clockOpen}"><label>Clock-in closes</label><input id="cC" type="time" value="${c.clockClose}"><label>Auto-close open sessions after (hours)</label><input id="cM" type="number" inputmode="numeric" value="${c.maxShiftHours}"><div style="margin-top:14px"><button onclick="A.saveClock()">Save</button></div>`)
+  +pan('terms','Terms',(c.terms||[]).length+' terms',`<p class="mut">Name, end date, and % of the target due by then. End dates are optional for now.</p><div id="termsBox">${termsHtml()}</div><div class="row"><button class="ghost sm" onclick="A.addTerm()">+ Add term</button><button class="ghost sm" onclick="A.evenTerms()">Spread evenly</button></div><div style="margin-top:14px"><button onclick="A.saveTerms()">Save</button></div>`)
+  +pan('crops','Crop list',cropsCat().length+' crops',`<p class="mut">Households pick from this list when they record what they planted. Anything else waits for staff to check.</p>${cropsCat().map((c,i)=>`<div class="row sp" style="border-top:1px solid var(--line)"><span>${esc(c)}</span><button class="text" onclick="A.delCrop(${i})" aria-label="Remove ${esc(c)}">\u2715</button></div>`).join('')}<label for="nc">Add a crop</label><div class="row" style="flex-wrap:nowrap"><input id="nc" maxlength="30" placeholder="e.g. Talong" style="min-width:0"><button style="flex:none" onclick="A.addCrop()">Add</button></div>`)
+  +pan('page','Program page',nb+' block'+(nb===1?'':'s'),`<p class="mut">Households see these blocks in this order. Drag the handle \u2807 or use \u25b2 \u25bc to reorder. Text supports Markdown: <code># Heading</code>, <code>**bold**</code>, <code>- list</code>, <code>[link](https://...)</code>.</p><div id="blkBox">${blocksHtml()}</div><div class="row"><button class="ghost" onclick="A.addBlk('slides')">+ Slides</button><button class="ghost" onclick="A.addBlk('text')">+ Text</button></div><div class="row" style="margin-top:14px"><button onclick="A.saveBlocks()">Save</button><button class="ghost" onclick="A.previewBlocks()">Preview</button></div>`)
+  +pan('data','Excel','Import and export',`<p class="mut">Import the scholar sheet "Sorted by Barangay". Existing households keep their target type.</p><input id="xf" type="file" accept=".xlsx,.xls"><div class="row" style="margin-top:12px"><button onclick="A.importXlsx()">Import</button><button class="ghost" onclick="A.exportXlsx()">Export year</button></div>`)}
+Object.assign(A,{
+ setBlk:(i,k,v)=>{if(S.pb&&S.pb[i])S.pb[i][k]=v},
+ addBlk:t=>{S.pb??=initBlocks();S.pb.push({id:uid(),type:t,title:'',url:'',md:''});redrawBlk();const l=$('#blkBox').lastElementChild;if(l)l.scrollIntoView({behavior:'smooth',block:'center'})},
+ delBlk:i=>{const b=S.pb[i];if((b.title||b.url||b.md)&&!confirm('Delete this block?'))return;S.pb.splice(i,1);redrawBlk()},
+ moveBlk:(i,d)=>{const j=i+d;if(j<0||j>=S.pb.length)return;[S.pb[i],S.pb[j]]=[S.pb[j],S.pb[i]];redrawBlk()},
+ previewBlocks:()=>open_(`<div class="row sp"><h2 style="margin:0">Preview</h2><button class="text" onclick="A.close()">Close</button></div><p class="mut">This is how households will see it.</p>${programHtml((S.pb||initBlocks()).filter(b=>b.title||b.md||slideEmbed(b.url)))}`),
+ saveBlocks:guard(async()=>{const bl=(S.pb||initBlocks()).map(b=>({id:b.id,type:b.type,title:b.title.trim(),url:b.type==='slides'?b.url.trim():'',md:b.md.trim()}));
+   const bad=bl.findIndex(b=>b.type==='slides'?!slideEmbed(b.url):!(b.title||b.md));
+   if(bad>=0)return toast(bl[bad].type==='slides'?'Block '+(bad+1)+': add a valid Google Slides link':'Block '+(bad+1)+' is empty');
+   await setDoc(doc(db,'config','program'),{programBlocks:bl},{merge:true});S.pb=null;A.r();toast('Program page saved')}),
+ saveClock:guard(async()=>{await setDoc(doc(db,'config','program'),{clockOpen:$('#cO').value,clockClose:$('#cC').value,maxShiftHours:+$('#cM').value},{merge:true});toast('Clock-in saved')}),
+ saveTerms:guard(async()=>{let terms=(S.td||S.cfg.terms||[]).map((t,i)=>({name:String(t.name||'').trim()||'Term '+(i+1),end:t.end||'',pct:+t.pct||0}));const dated=terms.every(t=>t.end);
+   if(terms.some(t=>t.end&&!(t.pct>0&&t.pct<=100)))return toast('A term with an end date needs a % from 1 to 100');
+   if(dated)terms=terms.sort((a,b)=>a.end>b.end?1:-1);
+   if(dated&&terms.length&&terms[terms.length-1].pct!==100&&!confirm('The last term is not 100% of the target. Save anyway?'))return;
+   await setDoc(doc(db,'config','program'),{terms},{merge:true});S.td=null;A.r();toast('Terms saved')})
+});
+Object.assign(A,{
+ migrateContacts:guard(async()=>{const ids=Object.keys(S.hh).filter(i=>S.hh[i].contactNumber!==undefined||S.hh[i].masterEmail!==undefined);if(!ids.length)return toast('Nothing to move');
+   if(!confirm('Move the contact details of '+ids.length+' households to private storage? Nothing is lost. Podmates will only see them if the household agrees.'))return;
+   const ops=[];ids.forEach(i=>{const h=S.hh[i],ex=S.contacts[i]||{},c={pod:h.pod?String(h.pod):'',shared:ex.shared===true};
+     if(!ex.contactNumber&&h.contactNumber)c.contactNumber=h.contactNumber;
+     if(!ex.masterEmail&&h.masterEmail)c.masterEmail=h.masterEmail;
+     ops.push(b=>b.set(doc(db,'contacts',i),c,{merge:true}));ops.push(b=>b.update(doc(db,'households',i),{contactNumber:deleteField(),masterEmail:deleteField()}))});
+   await runBatch(ops);toast('Contact details moved')}),
+ addWindow:guard(async n=>{const w={id:uid(),pod:String(n),day:'Mon',start:'08:00',end:'11:00'};S.open.pods=true;S.open['pod'+n]=true;await setDoc(doc(db,'config','program'),{windows:[...(S.cfg.windows||[]),w]},{merge:true});toast('Window added. Set its day, time and households.')}),
+ saveWindow:guard(async wid=>{document.activeElement?.blur?.();const w=(S.cfg.windows||[]).find(x=>x.id===wid),d=S.winDraft[wid];if(!w||!d)return;
+   if(!d.start||!d.end||d.end<=d.start)return toast('The end time must be after the start time');
+   const{ids,bad}=parseIds(d.hh);if(bad.length)return toast('Not found: '+bad.join(', '));
+   const out=ids.filter(i=>String(S.hh[i].pod||'')!==String(w.pod));if(out.length)return toast(out.join(', ')+(out.length>1?' are':' is')+' not in Pod '+w.pod+'. Add to the pod first.');
+   const cur=Object.keys(S.hh).filter(i=>S.hh[i].window===wid),add=ids.filter(i=>!cur.includes(i)),rem=cur.filter(i=>!ids.includes(i));
+   const wins=(S.cfg.windows||[]).map(x=>x.id===wid?{...x,day:d.day,start:d.start,end:d.end}:x),ops=[b=>b.set(doc(db,'config','program'),{windows:wins},{merge:true})];
+   add.forEach(i=>ops.push(b=>b.update(doc(db,'households',i),{window:wid})));rem.forEach(i=>ops.push(b=>b.update(doc(db,'households',i),{window:deleteField()})));
+   await runBatch(ops);delete S.winDraft[wid];toast('Window saved')}),
+ delWindow:guard(async wid=>{const w=(S.cfg.windows||[]).find(x=>x.id===wid);if(!w)return;const ms=Object.keys(S.hh).filter(i=>S.hh[i].window===wid);
+   if(!confirm('Delete '+winLabel(w)+'?'+(ms.length?'\n'+ms.length+' household(s) will have no window.':'')))return;
+   const ops=ms.map(i=>b=>b.update(doc(db,'households',i),{window:deleteField()}));ops.push(b=>b.set(doc(db,'config','program'),{windows:(S.cfg.windows||[]).filter(x=>x.id!==wid)},{merge:true}));await runBatch(ops);delete S.winDraft[wid];toast('Window deleted')}),
+ setWindow:guard(async(id,v)=>{await updateDoc(doc(db,'households',id),{window:v||deleteField()});S.winDraft={};toast(v?'Window set':'Window cleared')}),
+ addRole:guard(async()=>{const n=($('#nr')?.value||'').trim();if(!n)return toast('Type a role name first');const r={id:uid(),name:n,desc:''};S.open.roles=true;S.open['role'+r.id]=true;
+   await setDoc(doc(db,'config','program'),{roles:[...(S.cfg.roles||[]),r]},{merge:true});toast('Role added. Choose who holds it in each pod.')}),
+ renameRole:guard(async(id,v)=>{v=v.trim();if(!v)return toast('A role needs a name');await setDoc(doc(db,'config','program'),{roles:(S.cfg.roles||[]).map(r=>r.id===id?{...r,name:v}:r)},{merge:true});toast('Saved')}),
+ roleDesc:guard(async(id,v)=>{await setDoc(doc(db,'config','program'),{roles:(S.cfg.roles||[]).map(r=>r.id===id?{...r,desc:v.trim()}:r)},{merge:true});toast('Saved')}),
+ delRole:guard(async id=>{const r=(S.cfg.roles||[]).find(x=>x.id===id);if(!r||!confirm('Delete the role "'+r.name+'"? Everyone holding it will lose it.'))return;
+   const ops=Object.entries(S.holders).filter(([k,v])=>v.roleId===id).map(([k])=>b=>b.delete(doc(db,'roleHolders',k)));ops.push(b=>b.set(doc(db,'config','program'),{roles:(S.cfg.roles||[]).filter(x=>x.id!==id)},{merge:true}));await runBatch(ops);toast('Role deleted')}),
+ setHolder:guard(async(id,pod,hh)=>{const k=id+'_'+pod;if(!hh){await deleteDoc(doc(db,'roleHolders',k));toast('Role cleared')}else{await setDoc(doc(db,'roleHolders',k),{roleId:id,pod:String(pod),hhId:hh});toast(hh+' is now '+roleName(id)+' for Pod '+pod)}}),
+ /* ----- parents ----- */
+ contactModal(){const id=S.profile.householdId,h=S.hh[id]||{},c=S.myContact||{},em=c.masterEmail||h.masterEmail||'',ph=c.contactNumber||h.contactNumber||'';
+   open_(`<h2>My contact details</h2><p class="mut">Only your podmates see these, and only if you share them.</p><label>Mobile number</label><input id="cN" type="tel" inputmode="tel" value="${esc(ph)}" placeholder="09XXXXXXXXX"><label>Email</label><input id="cE" type="email" inputmode="email" value="${esc(em)}" placeholder="name@example.com"><div class="row" style="margin-top:14px"><button onclick="A.saveMyContact()">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
+ saveMyContact:guard(async()=>{if(isStaff())return;const id=S.profile.householdId,pod=S.hh[id]?.pod;if(!pod)return toast('You are not in a pod yet');
+   const ph=$('#cN').value.trim().replace(/[\s-]/g,''),em=$('#cE').value.trim().toLowerCase();
+   if(ph&&!/^(\+?\d{7,15}|09\d{9})$/.test(ph))return toast('Check the mobile number');
+   if(em&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em))return toast('Check the email address');
+   if(!ph&&!em)return toast('Add a phone number or an email');
+   if(S.myContact)await updateDoc(doc(db,'contacts',id),{contactNumber:ph,masterEmail:em});
+   else await setDoc(doc(db,'contacts',id),{contactNumber:ph,masterEmail:em,pod:String(pod),shared:false});
+   A.close();toast('Contact details saved')}),
+ shareContact:guard(async v=>{if(isStaff())return;const id=S.profile.householdId,pod=S.hh[id]?.pod;if(!pod)return toast('You are not in a pod yet');
+   const h=S.hh[id]||{},c=S.myContact||{},em=c.masterEmail||h.masterEmail||'',ph=c.contactNumber||h.contactNumber||'';
+   if(!em&&!ph)return toast('Add your phone or email first');
+   const b=writeBatch(db),now=Date.now();
+   if(S.myContact)b.update(doc(db,'contacts',id),{shared:v});
+   else b.set(doc(db,'contacts',id),{contactNumber:ph,masterEmail:em,pod:String(pod),shared:v});
+   if(v)S.reqTo.filter(r=>r.type==='contact'&&r.status==='pending'&&String(r.pod)===String(pod)).forEach(r=>b.update(doc(db,'requests',r.id),{status:'accepted',updatedAt:now}));
+   await b.commit();toast(v?'Your contact details are now shared with your pod':'You stopped sharing your contact details')}),
+ sharePoints:guard(async v=>{if(isStaff())return;const id=S.profile.householdId,pod=S.hh[id]?.pod;if(!pod)return toast('You are not in a pod yet');const p=pts(id);
+   if(S.myPp)await updateDoc(doc(db,'podpoints',id),{shown:v,points:p});else await setDoc(doc(db,'podpoints',id),{pod:String(pod),shown:v,points:p});toast(v?'Your points are now visible to your pod':'Your points are hidden')}),
+ askContact:guard(async to=>{if(isStaff())return;const id=S.profile.householdId,pod=String(S.hh[id]?.pod||''),rid='contact_'+id+'_'+to,ex=S.reqFrom.find(r=>r.id===rid),now=Date.now();
+   if(ex&&ex.status==='pending')return toast('You already asked');
+   if(ex)await updateDoc(doc(db,'requests',rid),{status:'pending',updatedAt:now});else await setDoc(doc(db,'requests',rid),{type:'contact',pod,fromHh:id,toHh:to,status:'pending',createdAt:now,updatedAt:now});toast('Request sent')}),
+ cancelReq:guard(async rid=>{await deleteDoc(doc(db,'requests',rid))}),
+ answerReq:guard(async(rid,ok)=>{const r=S.reqTo.find(q=>q.id===rid);if(!r)return;const id=S.profile.householdId,now=Date.now();
+   if(!ok){await updateDoc(doc(db,'requests',rid),{status:'declined',updatedAt:now});return toast('Declined. They can ask again.')}
+   if(r.type==='contact')return A.shareContact(true);
+   const h=S.holders[r.assignId];if(!h||h.hhId!==r.fromHh)return toast('That role has already moved');
+   await updateDoc(doc(db,'requests',rid),{status:'accepted',updatedAt:now});
+   try{await updateDoc(doc(db,'roleHolders',r.assignId),{hhId:id})}catch(e){try{await updateDoc(doc(db,'requests',rid),{status:'pending',updatedAt:Date.now()})}catch(_){};throw e}
+   await deleteDoc(doc(db,'requests',rid));toast('You now hold '+roleName(r.roleId))}),
+ passRoleModal(k){const id=S.profile.householdId,h=S.holders[k];if(!h||h.hhId!==id)return;const ids=Object.keys(S.podHh).filter(i=>i!==id).sort(natCmp);
+   open_(`<h2>Pass ${esc(roleName(h.roleId)||'role')}</h2><p class="mut">Choose a podmate. They get a request, and the role moves only if they accept.</p><label for="rp">Podmate</label><select id="rp">${ids.map(i=>`<option value="${i}">${esc(S.podHh[i].name)} (${i})</option>`).join('')}</select><div class="row" style="margin-top:14px"><button onclick="A.sendRole('${k}')">Send request</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
+ sendRole:guard(async k=>{const id=S.profile.householdId,h=S.holders[k],to=$('#rp')?.value;if(!h||h.hhId!==id||!to)return toast('Choose a podmate');const rid='role_'+k+'_'+to,ex=S.reqFrom.find(q=>q.id===rid),now=Date.now();
+   if(ex&&ex.status==='pending')return toast('You already asked them');
+   if(ex)await updateDoc(doc(db,'requests',rid),{status:'pending',updatedAt:now});else await setDoc(doc(db,'requests',rid),{type:'role',roleId:h.roleId,assignId:k,pod:String(h.pod),fromHh:id,toHh:to,status:'pending',createdAt:now,updatedAt:now});
+   A.close();toast('Request sent')})
+});
+document.addEventListener('pointerdown',e=>{const g=e.target.closest&&e.target.closest('[data-grip]');if(!g||S.role!=='admin')return;e.preventDefault();
+  const box=$('#blkBox'),el=g.closest('.blk');if(!box||!el)return;el.classList.add('drag');g.setPointerCapture(e.pointerId);
+  const mv=ev=>{const y=ev.clientY;if(y<90)scrollBy(0,-14);else if(y>innerHeight-90)scrollBy(0,14);const nx=[...box.children].filter(c=>c!==el).find(c=>{const r=c.getBoundingClientRect();return y<r.top+r.height/2});box.insertBefore(el,nx||null)};
+  const up=()=>{g.removeEventListener('pointermove',mv);g.removeEventListener('pointerup',up);g.removeEventListener('pointercancel',up);S.pb=[...box.children].map(c=>S.pb.find(b=>b.id===c.dataset.id));redrawBlk()};
+  g.addEventListener('pointermove',mv);g.addEventListener('pointerup',up);g.addEventListener('pointercancel',up)});
+const guestBonus=l=>Math.min(Math.max(+l.guests||0,0),S.cfg.maxGuests)*S.cfg.guestPoints;
+const HDEST={feeding:'Fed to scholars',sold:'Sold',shared:'Shared with households',other:'Other'};
+const DEFCROPS=['Ampalaya','Kalabasa','Patola','Kamatis','Cherry tomato','Mustasa','Okra','Talong','Sitaw','Pechay','Kangkong','Sili','Upo','Mais','Saging'];
+const cropList=()=>[...new Set([...(S.cfg.crops&&S.cfg.crops.length?S.cfg.crops:DEFCROPS),...S.harv.map(h=>h.crop)].filter(Boolean))].sort();
+const hInYear=h=>inRange(h.date,S.cfg.yearStart,S.cfg.yearEnd);
+const cap1=t=>{t=String(t||'').trim().replace(/\s+/g,' ');return t?t[0].toUpperCase()+t.slice(1):''};
+const qtyText=c=>[c.kg?c.kg+' kg':'',c.pcs?c.pcs+' pcs':'',c.bundle?c.bundle+' bundles':''].filter(Boolean).join(' \u00b7 ');
+function calcStats(){const H=S.harv.filter(hInYear),by={},dest={};let tk=0;
+  H.forEach(h=>{const c=by[h.crop]??={kg:0,pcs:0,bundle:0};c[h.unit]=(c[h.unit]||0)+(+h.qty||0);if(h.unit==='kg'){tk+=+h.qty||0;dest[h.dest]=(dest[h.dest]||0)+(+h.qty||0)}});
+  const crops=Object.entries(by).map(([crop,v])=>({crop,kg:r2(v.kg),pcs:r2(v.pcs),bundle:r2(v.bundle)})).sort((a,b)=>b.kg-a.kg||(b.pcs+b.bundle)-(a.pcs+a.bundle)).slice(0,10);
+  return{year:S.cfg.currentYear||'',kg:r2(tk),dest:Object.fromEntries(Object.entries(dest).map(([k,v])=>[k,r2(v)])),crops,entries:H.length,updatedAt:Date.now()}}
+const pushStats=async()=>{try{await setDoc(doc(db,'farmstats','summary'),calcStats())}catch(e){console.error(e)}};
+function farmCard(){const f=S.fstats;if(!f||!f.entries)return'';
+  return `<div class="card"><h2>Our farm${f.year?' \u00b7 '+yLabel(f.year):''}</h2><div class="kpi"><div><b>${f.kg}</b>kg harvested</div><div><b>${(f.dest&&f.dest.feeding)||0}</b>kg fed to scholars</div></div>${(f.crops||[]).slice(0,5).map(c=>`<div class="row sp"><span>${esc(c.crop)}</span><span class="mut">${qtyText(c)}</span></div>`).join('')}</div>`}
+const cropsCat=()=>S.cfg.crops&&S.cfg.crops.length?S.cfg.crops:DEFCROPS;
+function plantCard(id){const all=S.plant.filter(p=>p.hhId===id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)),ok=all.filter(p=>p.status!=='pending'),pend=all.filter(p=>p.status==='pending'),g={};
+  ok.forEach(p=>{const k=p.crop||p.note;g[k]=(g[k]||0)+(+p.qty||0)});
+  const chips=Object.entries(g).map(([k,n])=>`<span class="sch" style="font-size:14px;padding:6px 12px">${esc(k)}${n?' \u00d7'+n:''}</span>`).join('');
+  return `<div class="card"><div class="row sp"><h2 style="margin:0">What we planted</h2><button class="sm ghost" onclick="A.plantModal()">+ Add</button></div>${chips?`<div class="row" style="gap:8px;margin-top:10px">${chips}</div>`:'<p class="mut" style="margin:8px 0 0">Nothing yet. Tap + Add to tell us what your household planted.</p>'}${pend.length?`<p class="mut" style="margin:10px 0 0">Waiting for staff to check: ${pend.map(p=>esc(p.crop)+' \u00d7'+p.qty).join(', ')}</p>`:''}${all.length?`<details style="margin-top:10px"><summary style="min-height:48px;display:flex;align-items:center;color:var(--pri);cursor:pointer">See entries</summary>${all.slice(0,20).map(p=>`<div class="log row sp"><div><b>${esc(p.crop||p.note)}${p.qty?' \u00d7'+p.qty:''}</b><div class="mut">${fmtD(p.date)}${p.crop&&p.note?' \u00b7 '+esc(p.note):''}</div></div><button class="text" onclick="A.delPlant('${p.id}')" aria-label="Remove">\u2715</button></div>`).join('')}</details>`:''}</div>`}
+function reviewCard(){const R_=S.plant.filter(p=>p.status==='pending');if(!R_.length)return'';
+  return `<div class="card" style="border-left:4px solid var(--pend)"><h2>${R_.length} crop${R_.length>1?'s':''} to check</h2><p class="mut" style="margin-top:0">A household typed a crop that is not on the list. Add it to the list, or remove the entry.</p>${R_.map(p=>`<div class="log"><b>${esc(p.crop)} \u00d7${p.qty}</b><div class="mut">${esc(hhName(p.hhId))} \u00b7 ${fmtD(p.date)}${p.note?' \u00b7 '+esc(p.note):''}</div><div class="row" style="margin-top:6px"><button class="sm" onclick="A.approvePlant('${p.id}')">Add to list</button><button class="sm ghost" onclick="A.delPlant('${p.id}')">Remove</button></div></div>`).join('')}</div>`}
+const plantRows=q=>cropsCat().map((c,i)=>({c,i})).filter(x=>!q||x.c.toLowerCase().includes(String(q).toLowerCase())).map(({c,i})=>`<div class="row sp" style="padding:4px 0;border-top:1px solid var(--line)"><span>${esc(c)}</span><span class="row" style="flex-wrap:nowrap;gap:6px"><button type="button" class="ghost" style="width:48px;padding:0;font-size:22px" aria-label="One less ${esc(c)}" onclick="A.pStep(${i},-1)">\u2212</button><b id="pc${i}" style="min-width:28px;text-align:center">${S.pd[c]||0}</b><button type="button" style="width:48px;padding:0;font-size:22px" aria-label="One more ${esc(c)}" onclick="A.pStep(${i},1)">+</button></span></div>`).join('')||'<p class="mut">No crops match.</p>';
+function farmView(){const st=calcStats(),H=S.harv.filter(hInYear).sort((a,b)=>b.date>a.date?1:b.date<a.date?-1:(b.createdAt||0)-(a.createdAt||0)),P=S.plant.filter(p=>p.status!=='pending').sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).slice(0,15);
+  return `<div class="row sp" style="margin-bottom:12px"><h2 style="margin:0">Farm records</h2><span class="row"><button class="ghost" onclick="A.plantModal()">+ Plantings</button><button onclick="A.harvestModal()">+ Harvest</button></span></div>
+  <div class="card"><div class="kpi"><div><b>${st.kg}</b>kg harvested</div><div><b>${st.dest.feeding||0}</b>kg fed</div><div><b>${st.dest.sold||0}</b>kg sold</div><div><b>${st.entries}</b>harvest entries</div></div>${st.crops.map(c=>`<div class="row sp"><span>${esc(c.crop)}</span><span class="mut">${qtyText(c)}</span></div>`).join('')}</div>
+  <div class="card"><h2>Recent harvests</h2>${H.slice(0,30).map(h=>`<div class="log row sp"><div><b>${esc(h.crop)} \u00b7 ${h.qty} ${h.unit==='pcs'?'pcs':h.unit==='bundle'?'bundles':'kg'}</b><div class="mut">${fmtD(h.date)} \u00b7 ${HDEST[h.dest]||''}${h.hhId?' \u00b7 '+esc(hhName(h.hhId)):''}${h.note?' \u00b7 '+esc(h.note):''}</div></div><button class="text" onclick="A.delHarvest('${h.id}')" aria-label="Delete">\u2715</button></div>`).join('')||'<p class="mut">No harvests recorded yet.</p>'}</div>
+  ${reviewCard()}<div class="card"><h2>What households planted</h2>${P.map(p=>`<div class="log row sp"><div><b>${esc(p.crop||p.note)}${p.qty?' \u00d7'+p.qty:''}</b><div class="mut">${esc(hhName(p.hhId))} \u00b7 ${fmtD(p.date)}${p.crop&&p.note?' \u00b7 '+esc(p.note):''}</div></div><button class="text" onclick="A.delPlant('${p.id}')" aria-label="Delete">\u2715</button></div>`).join('')||'<p class="mut">Nothing yet.</p>'}</div>`}
+Object.assign(A,{
+ harvestModal(){open_(`<h2>Record a harvest</h2><label>Date</label><input id="hD" type="date" value="${ymd(new Date())}"><label>Crop</label><input id="hC" list="crops" placeholder="e.g. Okra" autocomplete="off"><datalist id="crops">${cropList().map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+  <div class="row" style="flex-wrap:nowrap"><div class="grow" style="min-width:0"><label>Amount</label><input id="hQ" type="number" step="0.01" inputmode="decimal"></div><div style="width:120px;flex:none"><label>Unit</label><select id="hU"><option value="kg">kg</option><option value="pcs">pieces</option><option value="bundle">bundles</option></select></div></div>
+  <label>Where it went</label><select id="hW">${Object.entries(HDEST).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><label>Credit a household (optional)</label><select id="hH"><option value="">None</option>${Object.keys(S.hh).sort(natCmp).map(i=>`<option value="${i}">${i} \u00b7 ${esc(S.hh[i].name)}</option>`).join('')}</select>
+  <label>Notes (optional)</label><input id="hN" placeholder="e.g. first picking from Plot 3"><div class="row" style="margin-top:14px"><button onclick="A.saveHarvest()">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
+ saveHarvest:guard(async()=>{const crop=cap1($('#hC').value),qty=+$('#hQ').value;if(!crop)return toast('Add the crop');if(!(qty>0))return toast('Add the amount');
+  await addDoc(collection(db,'harvests'),{date:$('#hD').value||ymd(new Date()),crop:crop.slice(0,40),qty:r2(qty),unit:$('#hU').value,dest:$('#hW').value,hhId:$('#hH').value,note:$('#hN').value.trim().slice(0,150),by:S.user.email,createdAt:Date.now()});
+  S._pushPending=true;A.close();toast('Harvest recorded')}),
+ delHarvest:guard(async id=>{if(!confirm('Delete this harvest entry?'))return;S._pushPending=true;await deleteDoc(doc(db,'harvests',id))}),
+ delPlant:guard(async id=>{if(confirm('Remove this entry?'))await deleteDoc(doc(db,'plantings',id))})
+});
+Object.assign(A,{
+ step:(id,d)=>{const i=$('#'+id),mn=+i.min||0,mx=+i.max||99;i.value=Math.min(mx,Math.max(mn,(parseInt(i.value)||mn)+d));A.pplHint()},
+ pplHint:()=>{const n=Math.max(1,parseInt($('#cg')?.value)||1),h=$('#cgh');if(h)h.textContent=n<=1?'Just you':n+' people \u00b7 +'+Math.min(n-1,S.cfg.maxGuests)*S.cfg.guestPoints+' bonus points'}
+});
+Object.assign(A,{
+ plantModal(pre=''){S.pd={};S.pon=0;const ids=Object.keys(S.hh).sort(natCmp),today=ymd(new Date());
+  open_(`<h2>What did your household plant?</h2><p class="mut">Tap + for each crop and how many were planted. Only count what your household planted yourselves, not what farm staff planted.</p>${isStaff()?`<label>Household</label><select id="pH">${ids.map(i=>`<option value="${i}"${i===pre?' selected':''}>${i} \u00b7 ${esc(S.hh[i].name)}</option>`).join('')}</select>`:''}
+  <input id="pQ" placeholder="Search crops" style="margin:8px 0" oninput="A.plantFilter()"><div id="pL">${plantRows('')}</div>
+  <div class="log"><b>Not on the list?</b><p class="mut" style="margin:2px 0 8px">Staff will check it before it shows up.</p><div class="row sp" style="flex-wrap:nowrap"><input id="pO" maxlength="30" placeholder="Crop name" style="min-width:0"><span class="row" style="flex-wrap:nowrap;gap:6px"><button type="button" class="ghost" style="width:48px;padding:0;font-size:22px" aria-label="One less" onclick="A.pStep(-1,-1)">\u2212</button><b id="pcx" style="min-width:28px;text-align:center">0</b><button type="button" style="width:48px;padding:0;font-size:22px" aria-label="One more" onclick="A.pStep(-1,1)">+</button></span></div></div>
+  <label for="pD">Date</label><input id="pD" type="date" value="${today}" max="${today}"><label for="pN">Note (optional)</label><input id="pN" maxlength="60" placeholder="e.g. back plot">
+  <div class="row" style="margin-top:14px"><button onclick="A.savePlants()">Save</button><button class="ghost" onclick="A.close()">Cancel</button></div>`)},
+ plantFilter:()=>{$('#pL').innerHTML=plantRows($('#pQ').value)},
+ pStep:(i,d)=>{if(i<0){S.pon=Math.min(99,Math.max(0,(S.pon||0)+d));$('#pcx').textContent=S.pon;return}const c=cropsCat()[i];S.pd[c]=Math.min(99,Math.max(0,(S.pd[c]||0)+d));const e=$('#pc'+i);if(e)e.textContent=S.pd[c]},
+ savePlants:guard(async()=>{const hh=isStaff()?$('#pH').value:S.profile.householdId,pod=String(S.hh[hh]?.pod||''),now=Date.now(),date=$('#pD').value||ymd(new Date()),note=($('#pN').value||'').trim().slice(0,60),rows=[];
+  Object.entries(S.pd).forEach(([c,n])=>{if(n>0)rows.push({crop:c,qty:n,status:'ok'})});
+  const on=cap1($('#pO').value).slice(0,30);if(on&&!(S.pon>0))return toast('Set how many '+on+' were planted');if(on)rows.push({crop:on,qty:S.pon,status:isStaff()?'ok':'pending'});
+  if(!rows.length)return toast('Tap + next to what was planted');
+  const b=writeBatch(db);rows.forEach((r,k)=>b.set(doc(collection(db,'plantings')),{hhId:hh,pod,crop:r.crop,qty:r.qty,note:k===0?note:'',date,by:S.user.email,createdAt:now,status:r.status}));
+  await b.commit();A.close();toast(rows.length+' saved'+(rows.some(r=>r.status==='pending')?'. Staff will check the new crop.':''))}),
+ approvePlant:guard(async id=>{const p=S.plant.find(x=>x.id===id);if(!p)return;const c=p.crop,same=S.plant.filter(x=>x.status==='pending'&&String(x.crop).toLowerCase()===c.toLowerCase());
+  const ops=[b=>b.set(doc(db,'config','program'),{crops:[...new Set([...cropsCat(),c])]},{merge:true})];same.forEach(x=>ops.push(b=>b.update(doc(db,'plantings',x.id),{status:'ok',crop:c})));await runBatch(ops);toast(c+' added to the list')}),
+ addCrop:guard(async()=>{const c=cap1($('#nc').value).slice(0,30);if(!c)return toast('Type the crop name');if(cropsCat().some(x=>x.toLowerCase()===c.toLowerCase()))return toast('Already on the list');
+  S.open.crops=true;await setDoc(doc(db,'config','program'),{crops:[...cropsCat(),c]},{merge:true});toast(c+' added')}),
+ delCrop:guard(async i=>{const c=cropsCat()[i];if(!confirm('Remove '+c+' from the list? Past entries stay.'))return;S.open.crops=true;await setDoc(doc(db,'config','program'),{crops:cropsCat().filter((x,k)=>k!==i)},{merge:true})})
+});
+const ADM=['addCrop','delCrop','saveClock','saveTerms','saveBlocks','addBlk','delBlk','moveBlk','setBlk','previewBlocks','startYearModal','endYearModal','startYear','endYear','editYearModal','saveYear','undoLast','exportYear','endPreview','addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','setTarget','setPod','delLog','userDel','savePod','delPod','addPod','toggleSlot','migrateContacts','addWindow','saveWindow','delWindow','setWindow','addRole','renameRole','roleDesc','delRole','setHolder'],STF=['approvePlant','harvestModal','saveHarvest','delHarvest','approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
 ADM.forEach(k=>{const f=A[k];A[k]=(...a)=>S.role==='admin'?f(...a):null});
 STF.forEach(k=>{const f=A[k];A[k]=(...a)=>isStaff()?f(...a):null});
 window.S_=S;
