@@ -87,6 +87,11 @@ button.fchip.on{background:var(--pc);color:var(--on-pc);border-color:transparent
 .dc.out{opacity:.45}.dc.today{border-color:var(--pri)}.dc.sel{box-shadow:0 0 0 3px #1b5e20;border-color:#fff}
 .sw{display:inline-block;width:18px;height:18px;border-radius:5px}.dot{display:inline-block;width:10px;height:10px;border-radius:5px;vertical-align:middle}
 .calwrap{display:grid;gap:0 12px}@media(min-width:900px){.calwrap{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);align-items:start}}
+.claim{max-width:440px}.logo{width:64px;height:64px;border-radius:20px;background:var(--pc);display:inline-flex;align-items:center;justify-content:center;font-size:32px}
+.plist{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:16px;background:var(--card)}
+button.pick{width:100%;min-height:56px;border-radius:0;background:transparent;color:var(--txt);display:flex;align-items:center;justify-content:flex-start;gap:14px;padding:8px 16px;text-align:left;font-weight:400;font-size:15px;border-bottom:1px solid var(--line);filter:none}
+button.pick:last-child{border-bottom:0}button.pick.on{background:var(--pc);color:var(--on-pc)}button.pick:hover{background:var(--scl)}button.pick.on:hover{background:var(--pc)}
+.rd{flex:none;width:20px;height:20px;border-radius:10px;border:2px solid var(--ol)}.pick.on .rd{border-color:var(--pri);background:radial-gradient(var(--pri) 0 45%,transparent 50%)}
 </style>
 </head>
 <body>
@@ -193,7 +198,7 @@ function hhSorted(){let ids=Object.keys(S.hh);const P={};ids.forEach(i=>P[i]=pts
 function clearSubs(){S.unsubs.forEach(u=>u());S.unsubs=[];clearInterval(S.timer)}
 const sub=(ref,cb)=>S.unsubs.push(onSnapshot(ref,cb,e=>{console.error(e);toast('Permission or network error: '+e.code)}));
 onAuthStateChanged(auth,user=>{
-  clearSubs();S.user=user;S.profile=undefined;S.hh={};S.att=[];S.users=[];S.podHh={};S.podAtt=[];S._pod=null;S._pn0=null;S._hhSub=false;S.contacts={};S.pp={};S.holders={};S.myContact=null;S.myPp=null;S.podContacts={};S.podPts={};S.reqFrom=[];S.reqTo=[];S._attOk=false;S._cfgOk=false;S.years=[];S.events=[];S.harv=[];S.plant=[];S.fstats=null;
+  clearSubs();S.user=user;S.profile=undefined;S.hh={};S.att=[];S.users=[];S.podHh={};S.podAtt=[];S._pod=null;S._pn0=null;S._hhSub=false;S.contacts={};S.pp={};S.holders={};S.myContact=null;S.myPp=null;S.podContacts={};S.podPts={};S.reqFrom=[];S.reqTo=[];S._attOk=false;S._cfgOk=false;S.years=[];S.events=[];S.harv=[];S.plant=[];S.fstats=null;S.claimSel=null;S.claimQ='';
   if(!user){S.role=null;return render()}
   const em=(user.email||'').toLowerCase();
   S.role=em===ADMIN_EMAIL?'admin':em===LIAISON_EMAIL?'liaison':'parent';S.tab=S.role==='admin'?'dash':'approvals';
@@ -250,7 +255,7 @@ function render(){
   if(isStaff()){nav.hidden=false;return staffView()}
   nav.hidden=true;nav.innerHTML='';
   if(!S.profile)return app.innerHTML=claimView();
-  if(S.profile.status!=='active')return app.innerHTML=`<div class="center"><div style="font-size:56px">🌱</div><h2>Waiting for approval</h2><p class="mut" style="max-width:320px">Your request to join household <b>${esc(hhName(S.profile.householdId))}</b> was sent. The Farm Liaison will confirm it. This screen updates by itself.</p><button class="ghost" onclick="A.cancelClaim()">Choose a different household</button></div>`;
+  if(S.profile.status!=='active')return app.innerHTML=`<div class="center"><div style="font-size:56px">🌱</div><h2>Waiting for approval</h2><p class="mut" style="max-width:320px">Your request to join household <b>${esc(S.profile.householdId)} ${esc(hhName(S.profile.householdId))}</b> was sent. The Farm Liaison will confirm it. This screen updates by itself.</p><button class="ghost" onclick="A.cancelClaim()">Choose a different household</button></div>`;
   nav.hidden=false;const nIn=incoming().length;nav.innerHTML=[['home','Home','home'],['pod','My pod','people'],['program','Program','book']].map(([k,l,i])=>navBtn(l,i,S.ptab===k,`S_.ptab='${k}';A.r()`,k==='pod'?nIn:0)).join('');
   parentView();
 }
@@ -261,10 +266,12 @@ const navBtn=(l,i,on,act,badge,cls='')=>`<button class="${on?'on ':''}${cls}" on
 function loginView(){return `<div class="center"><div style="font-size:64px">🥬</div><h1 style="margin:0;color:var(--pri-d)">Ugnayan Gulayan</h1><p class="mut">Farm attendance and points for Noah Scholarship households</p>
 <button style="width:100%;max-width:340px;min-height:56px" onclick="A.google()">Sign in with Google</button>
 ${S.showStaff?`<div class="card"><h2>Staff sign in</h2><label>Email</label><input id="em" type="email" autocomplete="username"><label>Password</label><input id="pw" type="password" autocomplete="current-password"><div style="margin-top:14px"><button style="width:100%" onclick="A.emailLogin()">Sign in</button></div></div>`:`<button class="text" onclick="S_.showStaff=true;A.r()">Staff sign in</button>`}</div>`}
-function claimView(){
-  const dir=Object.entries(S.cfg.directory||{}).sort();
-  return `<div class="center"><div class="card"><h2>Claim your household</h2><p class="mut">Select your family name from the list.</p>
-  ${dir.length?`<select id="hhSel"><option value="">Choose…</option>${dir.map(([id,n])=>`<option value="${id}">${esc(n)} (${id})</option>`).join('')}</select><div style="margin-top:14px"><button style="width:100%" onclick="A.claim()">Send request</button></div>`:`<p>The household list isn't loaded yet. Ask the Admin to import the scholar data.</p>`}</div></div>`}
+const claimLabel=(id,n,sc)=>`<b>${esc(id)}</b> ${esc(n)}${sc&&sc.length?` <span class="mut">(${sc.map(esc).join(', ')})</span>`:''}`;
+function claimRows(q){const d=S.cfg.directory||{},ds=S.cfg.claimNames===false?{}:(S.cfg.dirScholars||{}),ql=String(q||'').toLowerCase();
+  return Object.entries(d).sort((a,b)=>natCmp(a[0],b[0])).filter(([id,n])=>!ql||(id+' '+n+' '+(ds[id]||[]).join(' ')).toLowerCase().includes(ql)).map(([id,n])=>`<button type="button" class="pick${S.claimSel===id?' on':''}" data-id="${esc(id)}" role="radio" aria-checked="${S.claimSel===id}" onclick="A.pickHh('${esc(id)}')"><span class="rd"></span><span>${claimLabel(id,n,ds[id])}</span></button>`).join('')||'<p class="mut" style="padding:12px;margin:0">No match. Check the spelling or ask the Farm Liaison.</p>'}
+function claimView(){const has=Object.keys(S.cfg.directory||{}).length;
+  return `<div class="center"><div class="card claim"><div style="text-align:center"><div class="logo">\ud83c\udf31</div><h2 style="font-size:22px;margin:10px 0 4px">Find your household</h2><p class="mut" style="margin:0">Signed in as ${esc(S.user.email)}.<br>Choose the household your scholar belongs to.</p></div>
+  ${has?`<input id="cq" type="search" placeholder="Search by ID, surname or scholar" autocomplete="off" value="${esc(S.claimQ||'')}" oninput="A.claimFilter()" style="margin:16px 0 8px"><div id="cl" class="plist" role="radiogroup" aria-label="Households">${claimRows(S.claimQ)}</div><button style="width:100%;margin-top:14px;min-height:52px" id="cb"${S.claimSel?'':' disabled'} onclick="A.claim()">Send request</button><p class="mut" style="text-align:center;margin:10px 0 0">A teacher or the Farm Liaison will confirm it.</p>`:`<p>The household list isn't loaded yet. Ask the Admin to import the scholar data.</p>`}</div></div>`}
 
 function logHtml(a,opts={}){
   const low=a.durationHours<2&&a.status==='pending';
@@ -382,7 +389,7 @@ const A=window.A={
   google:guard(()=>signInWithPopup(auth,new GoogleAuthProvider())),
   emailLogin:guard(async()=>{try{await signInWithEmailAndPassword(auth,$('#em').value.trim(),$('#pw').value)}catch(e){toast('Check your email and password')}}),
   logout:()=>{S._hhSub=false;signOut(auth)},
-  claim:guard(async()=>{const id=$('#hhSel').value;if(!id)return toast('Pick your family name');
+  claim:guard(async()=>{const id=S.claimSel;if(!id)return toast('Choose your household');
     await setDoc(doc(db,'users',S.user.uid),{email:S.user.email.toLowerCase(),role:'parent',householdId:id,status:'pending'})}),
   cancelClaim:guard(async()=>{await deleteDoc(doc(db,'users',S.user.uid))}),
   clockIn:guard(async()=>{if(yearOver())return toast('The program year has ended');if(!inWin())return toast('Clock-in is closed right now');if(!confirm('Start your work day now?'))return;await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:new Date().toISOString()});toast('Clocked in')}),
@@ -423,9 +430,9 @@ const A=window.A={
     const g={};rows.forEach(r=>(g[String(r['Household ID']).trim()]??=[]).push(r));
     const first=(rs,k)=>String(rs.map(r=>r[k]).find(v=>String(v).trim())??'').trim();
     const phone=v=>/^9\d{9}$/.test(v)?'0'+v:v;
-    const b=writeBatch(db),dir={};
+    const b=writeBatch(db),dir={},ds={};
     for(const [id,rs] of Object.entries(g)){
-      const name=String(rs[0]['Last Name']).trim();dir[id]=name;
+      const name=String(rs[0]['Last Name']).trim();dir[id]=name;ds[id]=rs.map(r=>String(r['First Name']).trim()).filter(Boolean);
       const d={name,barangay:first(rs,'Barangay')},em=first(rs,'E-mail Address').toLowerCase(),ph=phone(first(rs,'Contact Number')),c={};
       if(em)c.masterEmail=em;if(ph)c.contactNumber=ph;
       if(!existing[id]){d.targetType='standard';d.createdAt=Date.now()}else if(existing[id].pod)c.pod=String(existing[id].pod);
@@ -433,7 +440,7 @@ const A=window.A={
       if(Object.keys(c).length)b.set(doc(db,'contacts',id),c,{merge:true});
     }
     rows.forEach(r=>b.set(doc(db,'scholars',String(r['Scholar ID']).trim()),{householdId:String(r['Household ID']).trim(),firstName:String(r['First Name']).trim(),lastName:String(r['Last Name']).trim(),gradeLevel:String(r['Grade Level']).trim()}));
-    b.set(doc(db,'config','program'),{directory:dir,...Object.fromEntries(Object.entries(DEF).filter(([k])=>k!=='directory'&&S.cfg[k]===DEF[k]).map(([k])=>[k,DEF[k]]))},{merge:true});
+    b.set(doc(db,'config','program'),{directory:dir,dirScholars:S.cfg.claimNames===false?deleteField():ds,...Object.fromEntries(Object.entries(DEF).filter(([k])=>k!=='directory'&&S.cfg[k]===DEF[k]).map(([k])=>[k,DEF[k]]))},{merge:true});
     await b.commit();toast(`Imported ${Object.keys(g).length} households, ${rows.length} scholars`)}),
   exportXlsx:guard(()=>{
     const sum=Object.keys(S.hh).sort().map(id=>{const h=S.hh[id],p=pts(id);return{'Household ID':id,Name:h.name,Barangay:h.barangay,Target:target(h),'Current Points':p,Standing:standing(h,p)[0]}});
@@ -652,7 +659,7 @@ function settingsHtml(){const c=S.cfg,nb=(S.pb||initBlocks()).length;
   +pan('terms','Terms',(c.terms||[]).length+' terms',`<p class="mut">Name, end date, and % of the target due by then. End dates are optional for now.</p><div id="termsBox">${termsHtml()}</div><div class="row"><button class="ghost sm" onclick="A.addTerm()">+ Add term</button><button class="ghost sm" onclick="A.evenTerms()">Spread evenly</button></div><div style="margin-top:14px"><button onclick="A.saveTerms()">Save</button></div>`)
   +pan('crops','Crop list',cropsCat().length+' crops',`<p class="mut">Households pick from this list when they record what they planted. Anything else waits for staff to check.</p>${cropsCat().map((c,i)=>`<div class="row sp" style="border-top:1px solid var(--line)"><span>${esc(c)}</span><button class="text" onclick="A.delCrop(${i})" aria-label="Remove ${esc(c)}">\u2715</button></div>`).join('')}<label for="nc">Add a crop</label><div class="row" style="flex-wrap:nowrap"><input id="nc" maxlength="30" placeholder="e.g. Talong" style="min-width:0"><button style="flex:none" onclick="A.addCrop()">Add</button></div>`)
   +pan('page','Program page',nb+' block'+(nb===1?'':'s'),`<p class="mut">Households see these blocks in this order. Drag the handle \u2807 or use \u25b2 \u25bc to reorder. Text supports Markdown: <code># Heading</code>, <code>**bold**</code>, <code>- list</code>, <code>[link](https://...)</code>.</p><div id="blkBox">${blocksHtml()}</div><div class="row"><button class="ghost" onclick="A.addBlk('slides')">+ Slides</button><button class="ghost" onclick="A.addBlk('text')">+ Text</button></div><div class="row" style="margin-top:14px"><button onclick="A.saveBlocks()">Save</button><button class="ghost" onclick="A.previewBlocks()">Preview</button></div>`)
-  +pan('data','Excel','Import and export',`<p class="mut">Import the scholar sheet "Sorted by Barangay". Existing households keep their target type.</p><input id="xf" type="file" accept=".xlsx,.xls"><div class="row" style="margin-top:12px"><button onclick="A.importXlsx()">Import</button><button class="ghost" onclick="A.exportXlsx()">Export year</button></div>`)}
+  +pan('data','Excel','Import and export',`<p class="mut">Import the scholar sheet "Sorted by Barangay". Existing households keep their target type.</p><input id="xf" type="file" accept=".xlsx,.xls"><div class="row" style="margin-top:12px"><button onclick="A.importXlsx()">Import</button><button class="ghost" onclick="A.exportXlsx()">Export year</button></div><label class="row" style="color:var(--txt);font-size:14px;margin-top:16px;flex-wrap:nowrap"><input type="checkbox" ${c.claimNames!==false?'checked':''} style="width:24px;min-height:24px;flex:none" onchange="A.refreshDirectory(this.checked)"> Show scholar first names when households claim their household</label><p class="mut" style="margin:4px 0 0">Anyone who signs in with Google can see this list before approval, so only first names are shown. Turn this off to show only the ID and surname.</p><div class="row" style="margin-top:10px"><button class="ghost sm" onclick="A.refreshDirectory(S_.cfg.claimNames!==false)">Update claim list</button></div>`)}
 Object.assign(A,{
  setBlk:(i,k,v)=>{if(S.pb&&S.pb[i])S.pb[i][k]=v},
  addBlk:t=>{S.pb??=initBlocks();S.pb.push({id:uid(),type:t,title:'',url:'',md:''});redrawBlk();const l=$('#blkBox').lastElementChild;if(l)l.scrollIntoView({behavior:'smooth',block:'center'})},
@@ -878,7 +885,13 @@ Object.assign(A,{
  histMore:()=>{S.hist.n+=50;A.r()},
  moreMenu:()=>open_(`<h2>More</h2>${[['farm','Farm','eco'],['users','Users','person'],['settings','Settings','tune']].map(([k,l,i])=>`<button class="text" style="width:100%;display:flex;justify-content:flex-start;gap:16px;align-items:center;min-height:56px;font-size:16px;color:var(--txt)" onclick="A.close();S_.tab='${k}';A.r()">${ic(i)}<span>${l}</span></button>`).join('')}`)
 });
-const ADM=['addCrop','delCrop','saveClock','saveTerms','saveBlocks','addBlk','delBlk','moveBlk','setBlk','previewBlocks','startYearModal','endYearModal','startYear','endYear','editYearModal','saveYear','undoLast','exportYear','endPreview','addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','setTarget','setPod','delLog','userDel','savePod','delPod','addPod','toggleSlot','migrateContacts','addWindow','saveWindow','delWindow','setWindow','addRole','renameRole','roleDesc','delRole','setHolder'],STF=['approvePlant','harvestModal','saveHarvest','delHarvest','approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
+Object.assign(A,{
+ pickHh:id=>{S.claimSel=id;document.querySelectorAll('#cl .pick').forEach(b=>{const on=b.dataset.id===id;b.classList.toggle('on',on);b.setAttribute('aria-checked',on)});const b=$('#cb');if(b)b.disabled=false},
+ claimFilter:()=>{S.claimQ=$('#cq').value;$('#cl').innerHTML=claimRows(S.claimQ)},
+ refreshDirectory:guard(async on=>{const snap=await getDocs(collection(db,'scholars')),g={};snap.forEach(d=>{const x=d.data();(g[x.householdId]??=[]).push(String(x.firstName||'').trim())});Object.keys(g).forEach(k=>g[k]=g[k].filter(Boolean));
+   await setDoc(doc(db,'config','program'),{claimNames:!!on,dirScholars:on?g:deleteField()},{merge:true});toast(on?'Claim list updated with scholar names':'Scholar names are hidden on the claim screen')})
+});
+const ADM=['refreshDirectory','addCrop','delCrop','saveClock','saveTerms','saveBlocks','addBlk','delBlk','moveBlk','setBlk','previewBlocks','startYearModal','endYearModal','startYear','endYear','editYearModal','saveYear','undoLast','exportYear','endPreview','addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','setTarget','setPod','delLog','userDel','savePod','delPod','addPod','toggleSlot','migrateContacts','addWindow','saveWindow','delWindow','setWindow','addRole','renameRole','roleDesc','delRole','setHolder'],STF=['approvePlant','harvestModal','saveHarvest','delHarvest','approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
 ADM.forEach(k=>{const f=A[k];A[k]=(...a)=>S.role==='admin'?f(...a):null});
 STF.forEach(k=>{const f=A[k];A[k]=(...a)=>isStaff()?f(...a):null});
 window.S_=S;
