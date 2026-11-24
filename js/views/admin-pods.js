@@ -1,0 +1,32 @@
+import {DAYS,glance,legacyPods,natCmp,podNums,wSort,winLabel} from "../domain/pods.js";
+import {hhName} from "../domain/points.js";
+import {where} from "../firebase.js";
+import {A,S} from "../state.js";
+import {pan} from "../ui/icons.js";
+import {$,esc} from "../util.js";
+function privacyNotice(){const n=Object.values(S.hh).filter(h=>h.contactNumber!==undefined||h.masterEmail!==undefined).length;if(!n)return'';
+  return `<div class="card" style="border-left:4px solid var(--pend)"><b>Move contact details to private storage</b><p class="mut">${n} households still have phone numbers and emails stored where podmates' devices can read them. Moving them lets each household decide whether to share. Publish the new Firestore rules first.</p><button class="sm" onclick="A.migrateContacts()">Move now</button></div>`}
+function winBlock(w){const d=S.winDraft[w.id]??={day:w.day,start:w.start,end:w.end,hh:Object.keys(S.hh).filter(i=>S.hh[i].window===w.id).sort(natCmp).join(', ')};
+  return `<div class="blk"><div class="row sp"><b>${esc(winLabel(w))}</b><button class="text" style="min-height:40px;padding:0 8px" onclick="A.delWindow('${w.id}')">Delete</button></div>
+  <label for="wd${w.id}">Day</label><select id="wd${w.id}" onchange="S_.winDraft['${w.id}'].day=this.value">${DAYS.map(([k,f])=>`<option value="${k}"${d.day===k?' selected':''}>${f}</option>`).join('')}</select>
+  <div class="row" style="flex-wrap:nowrap"><div class="grow" style="min-width:0"><label for="ws${w.id}">From</label><input id="ws${w.id}" type="time" value="${d.start}" onchange="S_.winDraft['${w.id}'].start=this.value"></div><div class="grow" style="min-width:0"><label for="we${w.id}">To</label><input id="we${w.id}" type="time" value="${d.end}" onchange="S_.winDraft['${w.id}'].end=this.value"></div></div>
+  <label for="wh${w.id}">Households in this window</label><input id="wh${w.id}" value="${esc(d.hh)}" placeholder="H01, H10, H14" autocapitalize="characters" autocomplete="off" oninput="S_.winDraft['${w.id}'].hh=this.value">
+  <div style="margin-top:12px"><button class="sm" onclick="A.saveWindow('${w.id}')">Save window</button></div></div>`}
+function podsPanel(){const L=podNums(),leg=legacyPods(),dr=S.podDraft??={},none=Object.keys(S.hh).filter(i=>!S.hh[i].pod).sort(natCmp);
+  const body=`<p class="mut" style="margin-top:12px">Add a pod, type the household IDs in it separated by commas (like <b>H01, H10, H14</b>) and tap Save pod. Then add the pod's windows: the days and times it works at the farm.</p>
+  ${none.length?`<p style="margin:0 0 12px"><b>Not in a pod yet (${none.length}):</b> <span class="mut">${none.join(', ')}</span></p>`:''}
+  ${L.map(n=>{const ms=Object.keys(S.hh).filter(i=>String(S.hh[i].pod||'')===n).sort(natCmp),v=dr[n]??ms.join(', '),W=(S.cfg.windows||[]).filter(w=>String(w.pod)===n).sort(wSort);
+    return pan('pod'+n,'Pod '+n,(ms.length?ms.length+' household'+(ms.length===1?'':'s'):'Empty')+(W.length?' \u00b7 '+W.length+' window'+(W.length===1?'':'s'):''),`<label for="pt${n}">Households in Pod ${n}</label><input id="pt${n}" value="${esc(v)}" placeholder="H01, H10, H14" autocapitalize="characters" autocomplete="off" oninput="S_.podDraft['${n}']=this.value"><p class="mut" style="margin:6px 0 0">${ms.length?ms.map(i=>esc(hhName(i))).join(', '):'No one yet.'}</p><div style="margin-top:10px"><button class="sm" onclick="A.savePod('${n}')">Save pod</button></div>
+    <div style="margin-top:18px"><b>Windows</b><p class="mut" style="margin:2px 0 8px">A window is a day and time the pod works at the farm. Each household goes in one window.</p>${W.map(winBlock).join('')||'<p class="mut">No windows yet.</p>'}<button class="ghost sm" onclick="A.addWindow('${n}')">+ Add window</button></div>
+    ${glance(ms,S.hh)}<div style="margin-top:16px"><button class="sm ghost" onclick="A.delPod('${n}')">Delete pod</button></div>`)}).join('')||'<p class="mut">No pods yet. Tap + Add pod to make the first one.</p>'}
+  <div class="row" style="margin-top:4px"><button class="ghost" onclick="A.addPod()">+ Add pod</button></div>
+  ${leg.length?`<div class="card" style="margin-top:12px"><b>Old pod names found</b><p class="mut" style="margin-bottom:0">${leg.map(esc).join(', ')} are not numbered pods. Typing their households into a numbered pod above replaces the old name.</p></div>`:''}`;
+  return pan('pods','Pods and windows',L.length?L.length+' pod'+(L.length===1?'':'s')+' \u00b7 tap to manage':'Set up pods',body)}
+function rolesPanel(){const R=S.cfg.roles||[],pods=podNums();
+  const body=`<p class="mut" style="margin-top:12px">Create a role like Pod Commander, then choose who holds it in each pod. A holder can pass the role to a podmate, who has to accept.</p>
+  ${R.map(r=>{const nh=Object.values(S.holders).filter(h=>h.roleId===r.id).length;
+    return pan('role'+r.id,esc(r.name),nh?nh+' pod'+(nh===1?'':'s')+' assigned':'Nobody assigned yet',`<label>Role name</label><input value="${esc(r.name)}" onchange="A.renameRole('${r.id}',this.value)"><label>What it does (optional)</label><input value="${esc(r.desc||'')}" placeholder="e.g. Confirms the crew count and runs the briefing" onchange="A.roleDesc('${r.id}',this.value)"><label style="margin-top:14px">Who holds it</label>${pods.map(n=>{const ms=Object.keys(S.hh).filter(i=>String(S.hh[i].pod||'')===n).sort(natCmp);if(!ms.length)return'';const cur=(S.holders[r.id+'_'+n]||{}).hhId||'';
+      return `<div class="row" style="flex-wrap:nowrap;margin-bottom:8px"><b style="min-width:52px">Pod ${n}</b><select aria-label="Holder in Pod ${n}" onchange="A.setHolder('${r.id}','${n}',this.value)"><option value="">Nobody yet</option>${ms.map(i=>`<option value="${i}"${cur===i?' selected':''}>${i} \u00b7 ${esc(S.hh[i].name)}</option>`).join('')}</select></div>`}).join('')||'<p class="mut">Set up pods first.</p>'}<p class="mut">Name and description save when you leave the field.</p><div style="margin-top:8px"><button class="sm ghost" onclick="A.delRole('${r.id}')">Delete role</button></div>`)}).join('')||'<p class="mut">No roles yet.</p>'}
+  <label for="nr">New role</label><div class="row" style="flex-wrap:nowrap"><input id="nr" placeholder="e.g. Pod Commander" style="min-width:0"><button style="flex:none" onclick="A.addRole()">Add</button></div>`;
+  return pan('roles','Roles',R.length?R.map(r=>esc(r.name)).join(', '):'Create roles like Pod Commander',body)}
+export {podsPanel,privacyNotice,rolesPanel,winBlock};

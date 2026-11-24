@@ -1,0 +1,57 @@
+import {HDEST} from "../domain/farm.js";
+import {dn} from "../domain/pace.js";
+import {DAYS,dayFull,natCmp,podLabel,wSort,winLabel} from "../domain/pods.js";
+import {hhName,r2} from "../domain/points.js";
+import {sub} from "../services/auth.js";
+import {A,S} from "../state.js";
+import {ic} from "../ui/icons.js";
+import {$,esc,fmtD,inRange,toD,ymd} from "../util.js";
+import {logActs,logHtml,unitTxt} from "./logs.js";
+import {kpi} from "./years.js";
+function histData(o){const inY=d=>o.yr==='all'||inRange(d,S.cfg.yearStart,S.cfg.yearEnd),okH=h=>o.hh==='all'||h===o.hh,it=[];
+  if(o.t.att)S.att.forEach(a=>{if(okH(a.hhId)&&inY(a.date)&&(o.st==='all'||a.status===o.st))it.push({d:toD(a.date),t:Date.parse(a.timeIn)||0,h:logHtml(a,{hh:1,actions:o.plain?'':logActs(a)})})});
+  if(o.t.harv)S.harv.forEach(h=>{if(okH(h.hhId||'')&&inY(h.date))it.push({d:toD(h.date),t:h.createdAt||0,h:`<div class="log row sp"><div><div class="row" style="gap:8px"><span class="chip pod">Harvest</span><b>${esc(h.crop)} \u00b7 ${h.qty} ${unitTxt(h.unit)}</b></div><div class="mut">${fmtD(h.date)} \u00b7 ${HDEST[h.dest]||''}${h.hhId?' \u00b7 '+esc(hhName(h.hhId)):''}${h.note?' \u00b7 '+esc(h.note):''}</div></div>${o.plain?'':`<button class="text" onclick="A.delHarvest('${h.id}')" aria-label="Delete harvest">\u2715</button>`}</div>`})});
+  if(o.t.plant)S.plant.forEach(p=>{if(okH(p.hhId)&&inY(p.date))it.push({d:toD(p.date),t:p.createdAt||0,h:`<div class="log row sp"><div><div class="row" style="gap:8px"><span class="chip role">Planting</span><b>${esc(p.crop||p.note)}${p.qty?' \u00d7'+p.qty:''}</b>${p.status==='pending'?'<span class="chip pending">Needs review</span>':''}</div><div class="mut">${esc(hhName(p.hhId))} \u00b7 ${fmtD(p.date)}${p.crop&&p.note?' \u00b7 '+esc(p.note):''}</div></div>${o.plain?'':`<button class="text" onclick="A.delPlant('${p.id}')" aria-label="Delete planting">\u2715</button>`}</div>`})});
+  return it.sort((a,b)=>a.d<b.d?1:a.d>b.d?-1:b.t-a.t)}
+function historyView(){const o=S.hist??={t:{att:true,plant:false,harv:false},hh:'all',yr:'year',st:'all',n:50,v:'list'};o.v??='list';const ids=Object.keys(S.hh).sort(natCmp),cal=o.v==='cal';
+  const chip=(k,l)=>`<button class="fchip${o.t[k]?' on':''}" aria-pressed="${!!o.t[k]}" onclick="A.histType('${k}')">${o.t[k]?ic('tick',18):''}${l}</button>`;
+  const opt=(v,l,cur)=>`<option value="${esc(v)}"${cur===v?' selected':''}>${esc(l)}</option>`;
+  const seg=`<div class="seg" role="group" aria-label="View as"><button class="${!cal?'on':''}" aria-pressed="${!cal}" onclick="A.histView('list')">${ic('list',18)}List</button><button class="${cal?'on':''}" aria-pressed="${cal}" onclick="A.histView('cal')">${ic('cal',18)}Calendar</button></div>`;
+  const filters=`<div class="card"><div class="row sp" style="margin-bottom:10px"><h2 style="margin:0">History</h2>${seg}</div><div class="row" style="gap:8px">${chip('att','Attendance')}${chip('plant','Plantings')}${chip('harv','Harvests')}</div>
+  <div class="row" style="flex-wrap:nowrap;margin-top:6px"><div class="grow" style="min-width:0"><label for="hh1">Household</label><select id="hh1" onchange="this.blur();A.histSet('hh',this.value)">${opt('all','All households',o.hh)}${ids.map(i=>opt(i,i+' \u00b7 '+(S.hh[i].name||''),o.hh)).join('')}</select></div>${cal?'':`<div class="grow" style="min-width:0"><label for="hy1">Period</label><select id="hy1" onchange="this.blur();A.histSet('yr',this.value)">${opt('year','This program year',o.yr)}${opt('all','All time',o.yr)}</select></div>`}</div>
+  ${o.t.att?`<label for="hs1">Attendance status</label><select id="hs1" onchange="this.blur();A.histSet('st',this.value)">${opt('all','All statuses',o.st)}${opt('pending','Pending',o.st)}${opt('approved','Approved',o.st)}${opt('voided','Voided',o.st)}</select>`:''}`;
+  if(cal)return filters+'</div>'+calHtml(o);
+  const all=histData(o);let last='',body='';all.slice(0,o.n).forEach(x=>{if(x.d!==last){body+=`<div class="sub">${x.d?fmtD(x.d):'No date'}</div>`;last=x.d}body+=x.h});
+  return filters+`<p class="mut" style="margin:12px 0 0">${all.length} record${all.length===1?'':'s'}${o.t.att&&!o.t.plant&&!o.t.harv?' \u00b7 attendance only':''}</p></div>
+  <div class="card">${body||'<p class="mut" style="margin:0">Nothing matches these filters.</p>'}${all.length>o.n?`<div style="margin-top:12px;text-align:center"><button class="tonal" onclick="A.histMore()">Show more (${all.length-o.n} left)</button></div>`:''}</div>`}
+function calHtml(o){const today=ymd(new Date());o.m??=today.slice(0,7);const[y,m]=o.m.split('-').map(Number);if(!o.d&&o.m===today.slice(0,7))o.d=today;
+  const off=(new Date(y,m-1,1).getDay()+6)%7,dim=new Date(y,m,0).getDate(),cells=[];for(let i=-off;i<Math.ceil((off+dim)/7)*7-off;i++)cells.push(ymd(new Date(y,m-1,1+i)));
+  const okA=a=>(o.hh==='all'||a.hhId===o.hh)&&(o.st==='all'||a.status===o.st),by={};if(o.t.att)S.att.forEach(a=>{if(okA(a))(by[toD(a.date)]??=[]).push(a)});
+  const cnt=d=>new Set((by[d]||[]).filter(a=>o.st==='voided'||a.status!=='voided').map(a=>a.hhId)).size,mx=Math.max(1,...cells.map(cnt));
+  const ml=S.att.filter(a=>toD(a.date).slice(0,7)===o.m&&(o.hh==='all'||a.hhId===o.hh)&&a.status!=='voided'&&a.kind!=='buyout');
+  const days=new Set(ml.map(a=>toD(a.date))).size,hhs=new Set(ml.map(a=>a.hhId)).size,hours=r2(ml.reduce((q,a)=>q+(a.durationHours||0),0)),pts_=ml.filter(a=>a.status==='approved').reduce((q,a)=>q+(a.points||0),0),pend=ml.filter(a=>a.status==='pending').length;
+  const hasP=d=>o.t.plant&&S.plant.some(p=>toD(p.date)===d&&(o.hh==='all'||p.hhId===o.hh)),hasH=d=>o.t.harv&&S.harv.some(h=>toD(h.date)===d&&(o.hh==='all'||h.hhId===o.hh));
+  const title=new Date(y,m-1,1).toLocaleDateString([],{month:'long',year:'numeric'}),WD=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const grid=cells.map(d=>{const c=cnt(d),lv=c?Math.min(4,Math.ceil(c/mx*4)):0,inM=d.slice(0,7)===o.m,dots=[(by[d]||[]).some(a=>a.status==='pending')?'<i style="background:#f9a825"></i>':'',hasP(d)?'<i style="background:#1565c0"></i>':'',hasH(d)?'<i style="background:#6d4c41"></i>':''].join('');
+    return `<button class="dc l${lv}${inM?'':' out'}${d===today?' today':''}${d===o.d?' sel':''}" onclick="A.histDay('${d}')" aria-label="${fmtD(d)}: ${c} household${c===1?'':'s'}"${d===o.d?' aria-current="date"':''}><span class="dn">${+d.slice(8)}</span><b>${c||''}</b><span class="mk">${dots}</span></button>`}).join('');
+  return `<div class="calwrap"><div class="card" id="calTop"><div class="row sp" style="margin-bottom:8px"><button class="text" style="padding:0 8px;min-width:48px" onclick="A.histMonth(-1)" aria-label="Previous month">${ic('cl')}</button><div style="text-align:center"><div style="font-size:18px;font-weight:500">${title}</div></div><button class="text" style="padding:0 8px;min-width:48px" onclick="A.histMonth(1)" aria-label="Next month">${ic('cr')}</button></div>
+  <div class="row sp" style="margin-bottom:8px"><span class="mut">Numbers show households that logged work.</span><button class="tonal sm" onclick="A.histToday()">Today</button></div>
+  <div class="cal" role="grid" aria-label="${title}">${WD.map(w=>`<div class="wd" role="columnheader">${w}</div>`).join('')}${grid}</div>
+  <div class="row mut" style="gap:6px;margin-top:12px"><span>Fewer</span>${[1,2,3,4].map(l=>`<i class="sw l${l}"></i>`).join('')}<span>More households</span></div>
+  <div class="row mut" style="gap:14px;margin-top:6px"><span><i class="dot" style="background:#f9a825"></i> Waiting for approval</span>${o.t.plant?'<span><i class="dot" style="background:#1565c0"></i> Planting</span>':''}${o.t.harv?'<span><i class="dot" style="background:#6d4c41"></i> Harvest</span>':''}</div>
+  <div class="kpi"><div><b>${days}</b>days with work</div><div><b>${hhs}</b>households</div><div><b>${hours}</b>hours</div><div><b>${pts_}</b>points approved</div></div>${pend?`<span class="chip pending">${pend} log${pend===1?'':'s'} waiting for approval this month</span>`:''}</div>
+  <div id="dayDetail">${dayHtml(o,by)}</div></div>`}
+function dayHtml(o,by){const date=o.d;if(!date)return `<div class="card"><p class="mut" style="margin:0">Tap a day to see which households went.</p></div>`;
+  const d=new Date(date+'T00:00'),wk=DAYS[(d.getDay()+6)%7],today=ymd(new Date()),logs=(by[date]||[]).slice().sort((a,b)=>(a.timeIn>b.timeIn?1:-1));
+  const best={};logs.forEach(a=>{const r={approved:3,pending:2,voided:1};if(!best[a.hhId]||r[a.status]>r[best[a.hhId]])best[a.hhId]=a.status});
+  const chips=Object.entries(best).map(([i,st])=>`<span class="chip ${st}">${esc(i)} \u00b7 ${esc(hhName(i))}</span>`).join(' ');
+  const qual=(a,i)=>a.hhId===i&&a.status!=='voided'&&a.kind!=='buyout'&&(a.durationHours||0)>=2;
+  const wins=o.hh==='all'?(S.cfg.windows||[]).filter(w=>w.day===wk[0]).sort(wSort):[];
+  const winHtml=wins.map(w=>{const mem=Object.keys(S.hh).filter(i=>S.hh[i].window===w.id).sort(natCmp),pres=mem.filter(i=>(by[date]||[]).some(a=>qual(a,i))),miss=mem.filter(i=>!pres.includes(i));
+    return `<div class="log"><div class="row sp"><b>${esc(winLabel(w))}</b><span class="chip nopod">${esc(podLabel(w.pod))}</span></div>${date>today?`<div class="mut">Scheduled \u00b7 ${mem.length} household${mem.length===1?'':'s'} expected</div>`:`<div class="row" style="gap:8px;margin-top:4px"><span>${pres.length} of ${mem.length} present</span><span class="chip ${pres.length>=2?'approved':'voided'}">${pres.length>=2?'Counts as a window day':'Below the minimum of 2'}</span></div>${miss.length?`<div class="mut" style="margin-top:4px">Not logged: ${miss.map(i=>esc(hhName(i))).join(', ')}</div>`:''}`}</div>`}).join('');
+  const hv=o.t.harv?S.harv.filter(h=>toD(h.date)===date&&(o.hh==='all'||h.hhId===o.hh)):[],pl=o.t.plant?S.plant.filter(p=>toD(p.date)===date&&(o.hh==='all'||p.hhId===o.hh)):[];
+  const extra=hv.map(h=>`<div class="log"><span class="chip pod">Harvest</span> <b>${esc(h.crop)} \u00b7 ${h.qty} ${unitTxt(h.unit)}</b><div class="mut">${HDEST[h.dest]||''}${h.hhId?' \u00b7 '+esc(hhName(h.hhId)):''}</div></div>`).join('')+pl.map(p=>`<div class="log"><span class="chip role">Planting</span> <b>${esc(p.crop||p.note)}${p.qty?' \u00d7'+p.qty:''}</b>${p.status==='pending'?' <span class="chip pending">Needs review</span>':''}<div class="mut">${esc(hhName(p.hhId))}</div></div>`).join('');
+  return `<div class="card"><div class="row sp"><div><div style="font-size:18px;font-weight:500">${dayFull(wk[0])}, ${fmtD(date)}</div>${date===today?'<span class="chip approved">Today</span>':date>today?'<span class="chip nopod">Upcoming</span>':''}</div><button class="text sm" onclick="document.getElementById('calTop').scrollIntoView({behavior:'smooth'})" aria-label="Back to calendar">${ic('up')}Calendar</button></div>
+  <h2 style="margin:14px 0 8px">Households that went (${Object.keys(best).length})</h2>${chips?`<div class="row" style="gap:6px">${chips}</div>`:`<p class="mut" style="margin:0">${o.t.att?'No attendance logged on this day.':'Attendance is turned off in the filters.'}</p>`}
+  ${winHtml?`<h2 style="margin:16px 0 4px">Pod windows</h2>${winHtml}`:''}${logs.length?`<h2 style="margin:16px 0 4px">Logs</h2>${logs.map(a=>logHtml(a,{hh:1,actions:logActs(a)})).join('')}`:''}${extra?`<h2 style="margin:16px 0 4px">Farm records</h2>${extra}`:''}</div>`}
+export {calHtml,dayHtml,histData,historyView};

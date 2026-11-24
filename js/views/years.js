@@ -1,0 +1,15 @@
+import {summarize,yearRows} from "../domain/points.js";
+import {A,S} from "../state.js";
+import {$,esc,fmtD,yLabel,ymd} from "../util.js";
+const kpi=sm=>`<div class="kpi"><div><b>${sm.points}</b>points earned</div><div><b>${sm.workDays}</b>work days</div><div><b>${sm.hours}</b>hours worked</div><div><b>${sm.active}/${sm.households}</b>households took part</div></div><div class="row" style="margin:10px 0"><span class="chip approved">${sm.good} In Good Standing</span><span class="chip pending">${sm.onTrack} On Track</span><span class="chip voided">${sm.needs} Needs Support</span></div>${sm.pending?`<p class="mut">\u26a0 ${sm.pending} log(s) are still pending and not counted.</p>`:''}`;
+const nextLabel=()=>{const m=/(\d{4})-(\d{4})/.exec(S.cfg.currentYear||'');const y=m?+m[2]:new Date().getFullYear();return `${y}-${y+1}`};
+const lastEvt=()=>[...S.events].filter(e=>!e.undone).sort((a,b)=>b.at-a.at)[0];
+const snap=()=>({currentYear:S.cfg.currentYear||'',yearStart:S.cfg.yearStart||'',yearEnd:S.cfg.yearEnd||'',pastYears:S.cfg.pastYears||[],terms:S.cfg.terms||[]});
+function yearsView(){const c=S.cfg,cur=c.currentYear,open=cur&&!c.yearEnd,ev=lastEvt();
+  const sm=summarize(yearRows(c.yearStart,c.yearEnd)),ys=[...S.years].sort((a,b)=>a.id<b.id?1:-1);
+  return `<div class="card"><div class="row sp"><div><div class="mut">Program year</div><h2 style="margin:0;font-size:26px">${cur?yLabel(cur):'Not started'}</h2><div class="mut">${cur?(open?'Open since ':'Ended ')+fmtD(open?c.yearStart:c.yearEnd):'Start your first year to begin counting.'}</div></div><span class="chip ${open?'approved':'pending'}">${open?'Open':cur?'Ended':'None'}</span></div>
+  ${cur?kpi(sm):''}<div class="row">${cur?`<button class="ghost" onclick="A.exportYear('${cur}')">Export Excel</button><button class="ghost" onclick="A.editYearModal()">Edit year</button>`:''}${open?`<button class="red" onclick="A.endYearModal()">End year\u2026</button>`:`<button onclick="A.startYearModal()">Start ${cur?'next':'first'} year\u2026</button>`}</div></div>
+  ${ev?`<div class="card" style="border-left:4px solid var(--pend)"><div class="row sp"><div><b>Last change: ${ev.type==='end'?'Ended':'Started'} ${yLabel(ev.year)}</b><div class="mut">${new Date(ev.at).toLocaleString()} by ${esc(ev.by)}</div></div><button class="ghost" onclick="A.undoLast()">Undo</button></div></div>`:''}
+  <div class="card"><h2>All years</h2>${ys.length?ys.map(y=>`<div class="log row sp"><div><b>${yLabel(y.id)}</b><div class="mut">${fmtD(y.start)} \u2013 ${y.end?fmtD(y.end):'open'}${y.summary?' \u00b7 '+y.summary.points+' points':''}</div></div><button class="ghost sm" onclick="A.exportYear('${y.id}')">Export</button></div>`).join(''):'<p class="mut">No years saved yet.</p>'}</div>`}
+const endPrev=()=>{const c=S.cfg,e=$('#yE').value||ymd(new Date()),sm=summarize(yearRows(c.yearStart,e));$('#yP').innerHTML=kpi(sm)+(sm.pending?`<label class="row" style="color:var(--txt);font-size:14px"><input id="yK" type="checkbox" style="width:24px;min-height:24px"> I understand pending logs won't be counted</label>`:'')};
+export {endPrev,kpi,lastEvt,nextLabel,snap,yearsView};
