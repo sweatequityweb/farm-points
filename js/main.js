@@ -1,3 +1,5 @@
+import "./actions/export-attendance.js";
+import {startScene} from "./ui/scene.js";
 import "./actions/availability.js";
 import "./views/schedule.js";
 import "./ui/inapp.js";
@@ -38,7 +40,9 @@ import "./views/staff.js";
 import "./views/years.js";
 import {A,S} from "./state.js";
 import {isStaff} from "./util.js";
-const ADM=['savePace','saveCmd','refreshDirectory','addCrop','delCrop','saveClock','saveTerms','saveBlocks','addBlk','delBlk','moveBlk','setBlk','previewBlocks','startYearModal','endYearModal','startYear','endYear','editYearModal','saveYear','undoLast','exportYear','endPreview','addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','setTarget','setPod','delLog','userDel','savePod','delPod','addPod','toggleSlot','migrateContacts','addWindow','saveWindow','delWindow','setWindow','addRole','renameRole','roleDesc','delRole','setHolder'],STF=['approvePlant','harvestModal','saveHarvest','delHarvest','approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
+const ADM=['savePace','saveCmd','refreshDirectory','addCrop','delCrop','saveClock','saveTerms','saveBlocks','addBlk','delBlk','moveBlk','setBlk','previewBlocks','startYearModal','endYearModal','startYear','endYear','editYearModal','saveYear','undoLast','exportYear','endPreview','addTerm','delTerm','setTerm','evenTerms','importXlsx','exportXlsx','saveCfg','saveCfg2','setTarget','setPod','delLog','userDel','savePod','delPod','addPod','toggleSlot','migrateContacts','addWindow','saveWindow','delWindow','setWindow','addRole','renameRole','roleDesc','delRole','setHolder'],STF=['exportAttendance','approvePlant','harvestModal','saveHarvest','delHarvest','approve','setStatus','userSet','saveManual','editModal','saveEdit','buyoutModal','saveBuyout'];
 ADM.forEach(k=>{const f=A[k];A[k]=(...a)=>S.role==='admin'?f(...a):null});
 STF.forEach(k=>{const f=A[k];A[k]=(...a)=>isStaff()?f(...a):null});
 export {ADM,STF};
+
+startScene(document.getElementById('bg'));

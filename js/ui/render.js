@@ -1,3 +1,4 @@
+import {sceneMode} from "./scene.js";
 import {cmdOn,cmdPending,syncCmdSub} from "../domain/commander.js";
 import {incoming} from "../domain/pods.js";
 import {hhName} from "../domain/points.js";
@@ -12,7 +13,7 @@ import {parentView} from "../views/parent.js";
 import {staffView} from "../views/staff.js";
 /* ---------- rendering ---------- */
 function render(){
-  schedSync();syncCmdSub();
+  schedSync();syncCmdSub();sceneMode(S.user?'app':'login');
   if(S._reModal&&$('#modal').classList.contains('show')&&!(document.activeElement&&$('#sheet').contains(document.activeElement)&&/^(SELECT|INPUT|TEXTAREA)$/.test(document.activeElement.tagName))){try{S._reModal()}catch(e){console.error(e)}}
   const app=$('#app'),nav=$('#nav'),hdr=$('#hdr');
   clearInterval(S.timer);

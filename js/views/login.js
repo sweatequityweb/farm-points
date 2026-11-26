@@ -1,10 +1,11 @@
+import {sceneOn} from "../ui/scene.js";
 import {inApp,inAppNotice} from "../ui/inapp.js";
 import {natCmp} from "../domain/pods.js";
 import {A,S} from "../state.js";
 import {$,esc} from "../util.js";
-function loginView(){return `<div class="center"><div style="font-size:64px">🥬</div><h1 style="margin:0;color:var(--pri-d)">Ugnayan Gulayan</h1><p class="mut">Farm attendance and points for Noah Scholarship households</p>
+function loginView(){return `<div class="center"><div class="heroc"><div style="font-size:64px">🥬</div><h1 style="margin:0;color:var(--pri-d)">Ugnayan Gulayan</h1><p class="mut">Farm attendance and points for Noah Scholarship households</p>
 ${inApp()?inAppNotice():`<button style="width:100%;max-width:340px;min-height:56px" onclick="A.google()">Sign in with Google</button>`}
-${S.showStaff?`<div class="card"><h2>Staff sign in</h2><label>Email</label><input id="em" type="email" autocomplete="username"><label>Password</label><input id="pw" type="password" autocomplete="current-password"><div style="margin-top:14px"><button style="width:100%" onclick="A.emailLogin()">Sign in</button></div></div>`:`<button class="text" onclick="S_.showStaff=true;A.r()">Staff sign in</button>`}</div>`}
+${S.showStaff?`<div class="card"><h2>Staff sign in</h2><label>Email</label><input id="em" type="email" autocomplete="username"><label>Password</label><input id="pw" type="password" autocomplete="current-password"><div style="margin-top:14px"><button style="width:100%" onclick="A.emailLogin()">Sign in</button></div></div>`:`<button class="text" onclick="S_.showStaff=true;A.r()">Staff sign in</button>`}<div><button class="text" onclick="A.sceneToggle()">🌿 Animated scenery: ${sceneOn()?'on':'off'}</button></div></div></div>`}
 const claimLabel=(id,n,sc)=>`<b>${esc(id)}</b> ${esc(n)}${sc&&sc.length?` <span class="mut">(${sc.map(esc).join(', ')})</span>`:''}`;
 function claimRows(q){const d=S.cfg.directory||{},ds=S.cfg.claimNames===false?{}:(S.cfg.dirScholars||{}),ql=String(q||'').toLowerCase();
   return Object.entries(d).sort((a,b)=>natCmp(a[0],b[0])).filter(([id,n])=>!ql||(id+' '+n+' '+(ds[id]||[]).join(' ')).toLowerCase().includes(ql)).map(([id,n])=>`<button type="button" class="pick${S.claimSel===id?' on':''}" data-id="${esc(id)}" role="radio" aria-checked="${S.claimSel===id}" onclick="A.pickHh('${esc(id)}')"><span class="rd"></span><span>${claimLabel(id,n,ds[id])}</span></button>`).join('')||'<p class="mut" style="padding:12px;margin:0">No match. Check the spelling or ask the Farm Liaison.</p>'}
