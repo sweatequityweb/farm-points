@@ -1,3 +1,4 @@
+import {inApp} from "../ui/inapp.js";
 import {DEF} from "../config.js";
 import {allLogs,findLog} from "../domain/commander.js";
 import {standing} from "../domain/pace.js";
@@ -11,7 +12,7 @@ import {inWin} from "../views/parent.js";
 /* ---------- actions ---------- */
 Object.assign(A,{
   r:render,close:()=>{$('#modal').classList.remove('show');S._reModal=null},
-  google:guard(()=>signInWithPopup(auth,new GoogleAuthProvider())),
+  google:guard(()=>inApp()?toast('Open this page in Chrome or Safari to sign in with Google'):signInWithPopup(auth,new GoogleAuthProvider())),
   emailLogin:guard(async()=>{try{await signInWithEmailAndPassword(auth,$('#em').value.trim(),$('#pw').value)}catch(e){toast('Check your email and password')}}),
   logout:()=>{S._hhSub=false;signOut(auth)},
   claim:guard(async()=>{const id=S.claimSel;if(!id)return toast('Choose your household');

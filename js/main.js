@@ -1,3 +1,4 @@
+import "./ui/inapp.js";
 import "./actions/claim.js";
 import "./actions/commander.js";
 import "./actions/core.js";

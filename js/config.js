@@ -1,4 +1,3 @@
-import {app} from "./firebase.js";
 /* ============ CONFIGURATION: paste your NEW Firebase project's config here ============ */
 const firebaseConfig = {
   apiKey: "AIzaSyCUsIydJpEClSyKKavQ1QQsC1qU4s-So_4",
