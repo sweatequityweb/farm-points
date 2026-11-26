@@ -1,3 +1,5 @@
+import "./actions/availability.js";
+import "./views/schedule.js";
 import "./ui/inapp.js";
 import "./actions/claim.js";
 import "./actions/commander.js";

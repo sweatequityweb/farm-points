@@ -1,3 +1,4 @@
+import {schedSection} from "../views/schedule.js";
 import {loc} from "../actions/staff-actions.js";
 import {availChips,ctc,isNumPod,podLabel,podNums,roleChips,slotGrid,wSort,winById,winLabel} from "../domain/pods.js";
 import {pts,target} from "../domain/points.js";
@@ -14,8 +15,8 @@ function hhModal(id){
   <p class="mut">${esc(x.barangay||'')}<br>${esc(c_.masterEmail||'no email on record')} · ${esc(c_.contactNumber||'')}<br><b>${pts(id)}</b> / ${target(x)} points</p>${outPts?`<p class="mut" style="color:var(--pend);margin:0 0 8px">${outPts} approved point(s) fall outside the program year and are not counted.</p>`:''}${paceDetail(x,pts(id))}${termRows(id,x)}
   ${adm?`<label>Target type</label><select onchange="A.setTarget('${id}',this.value)"><option value="standard"${x.targetType!=='adjusted'?' selected':''}>Standard (${S.cfg.targetStandard})</option><option value="adjusted"${x.targetType==='adjusted'?' selected':''}>Adjusted (${S.cfg.targetAdjusted})</option></select>`:''}
   ${adm?`<label for="hp1">Pod</label><select id="hp1" onchange="A.setPod('${id}',this.value)"><option value="">No pod</option>${[...podNums(),...(x.pod&&!isNumPod(x.pod)?[x.pod]:[])].map(n=>`<option value="${esc(n)}"${String(x.pod||'')===n?' selected':''}>${esc(podLabel(n))}</option>`).join('')}</select>`:`<p class="mut">${esc(podLabel(x.pod))}</p>`}
-  ${x.pod?(adm?`<label for="hw1">Window</label><select id="hw1" onchange="A.setWindow('${id}',this.value)"><option value="">No window</option>${(S.cfg.windows||[]).filter(w=>String(w.pod)===String(x.pod)).sort(wSort).map(w=>`<option value="${w.id}"${x.window===w.id?' selected':''}>${esc(winLabel(w))}</option>`).join('')}</select>`:`<p class="mut">${esc(winLabel(winById(x.window))||'No window')}</p>`):''}${roleChips(id)?`<div class="row" style="margin-top:10px">${roleChips(id)}</div>`:''}
-  <label>Days available at the farm</label>${adm?`<p class="mut" style="margin:0 0 8px">Tap to turn a time on or off. It saves right away.</p>${slotGrid(id,x.availability)}`:`<div class="row" style="gap:6px">${availChips(x.availability)}</div>`}
+  ${roleChips(id)?`<div class="row" style="margin-top:10px">${roleChips(id)}</div>`:''}
+  ${schedSection(id,x,adm)}
   <div class="row" style="margin:12px 0"><button class="sm" onclick="A.manualModal('${id}')">+ Add log</button><button class="sm ghost" onclick="A.buyoutModal('${id}')">Buy-out</button><button class="sm ghost" onclick="A.plantModal('${id}')">Plantings</button></div>
   ${logs.map(a=>logHtml(a,{actions:`<div class="row" style="margin-top:6px">${a.status!=='approved'?`<button class="sm" onclick="A.approve('${a.id}')">Approve</button>`:''}${a.status!=='voided'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','voided')">Void</button>`:''}${a.status!=='pending'?`<button class="sm ghost" onclick="A.setStatus('${a.id}','pending')">Reopen</button>`:''}${adm?`<button class="sm ghost" onclick="A.delLog('${a.id}')">Delete</button>`:''}</div>`})).join('')||'<p class="mut">No logs yet.</p>'}`,()=>hhModal(id));
 }

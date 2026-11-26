@@ -24,9 +24,6 @@ Object.assign(A,{
    if(!confirm('Delete Pod '+n+'?'+(ms.length?'\n'+ms.length+' household(s) will be left without a pod.':'')))return;
    const map={};ms.forEach(i=>map[i]='');await assignPod(map);
    await setDoc(doc(db,'config','program'),{pods:(S.cfg.pods||[]).map(String).filter(p=>p!==n)},{merge:true});delete S.podDraft[n];toast('Pod '+n+' deleted')}),
- toggleSlot:async(id,btn)=>{btn.classList.toggle('on');btn.setAttribute('aria-pressed',btn.classList.contains('on'));
-   const av=[...btn.parentElement.querySelectorAll('.slot.on')].map(b=>b.dataset.k);
-   try{await updateDoc(doc(db,'households',id),{availability:av})}catch(e){console.error(e);btn.classList.toggle('on');btn.setAttribute('aria-pressed',btn.classList.contains('on'));toast('Could not save: '+(e.code||e.message))}},
  saveCfg2:guard(async()=>{let terms=(S.td||S.cfg.terms||[]).map((t,i)=>({name:String(t.name||'').trim()||'Term '+(i+1),end:t.end||'',pct:+t.pct||0}));
    const dated=terms.every(t=>t.end);
    if(terms.some(t=>t.end&&!(t.pct>0&&t.pct<=100)))return toast('A term with an end date needs a % from 1 to 100');
