@@ -12,3 +12,5 @@ Object.assign(A,{
  histMore:()=>{S.hist.n+=50;A.r()},
  moreMenu:()=>open_(`<h2>More</h2>${[['farm','Farm','eco'],['users','Users','person'],['settings','Settings','tune']].map(([k,l,i])=>`<button class="text" style="width:100%;display:flex;justify-content:flex-start;gap:16px;align-items:center;min-height:56px;font-size:16px;color:var(--txt)" onclick="A.close();S_.tab='${k}';A.r()">${ic(i)}<span>${l}</span></button>`).join('')}`)
 });
+
+Object.assign(A,{histOpen:id=>{const o=S.hist;if(!o)return;o.open=o.open===id?null:id;A.r()}});
