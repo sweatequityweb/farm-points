@@ -46,7 +46,7 @@ function draw(dt){const c=s.c,{w,h}=s,t=s.t,d=new Date(),hr=d.getHours()+d.getMi
   bugs(c,dt,L,act);
   s.rings=s.rings.filter(o=>t-o.t0<.9);for(const o of s.rings){const a=(t-o.t0)/.9;c.strokeStyle=`rgba(255,255,255,${.7*(1-a)})`;c.lineWidth=2;c.beginPath();c.arc(o.x,o.y,a*Math.min(120,w*.2)+4,0,TAU);c.stroke()}
   s.parts=s.parts.filter(o=>t-o.t0<1.5);for(const o of s.parts){const a=t-o.t0;c.globalAlpha=1-a/1.5;c.fillStyle=o.c;c.beginPath();c.arc(o.x+o.vx*a,o.y+o.vy*a+90*a*a,2.4,0,TAU);c.fill()}c.globalAlpha=1;
-  if(s.v>.01){c.fillStyle=`rgba(246,250,244,${.5*s.v})`;c.fillRect(0,0,w,h)}}
+  if(s.v>.01){c.fillStyle=`rgba(246,250,244,${.82*s.v})`;c.fillRect(0,0,w,h)}}
 function sprouts(c,p,L){const t=s.t;s.sp=s.sp.filter(o=>t-o.t0<o.life);for(const o of s.sp){const age=t-o.t0,gr=ease(cl(age/2.4,0,1)),fade=cl((o.life-age)/2,0,1),hh=s.h*.13*gr*o.k,sw=Math.sin(t*1.6+o.p)*3*gr+(s.pv>.2?Math.sign(o.x-s.px)*3:0);c.globalAlpha=fade;
   c.strokeStyle=rgb(mixc([60,150,60],p[4],.3));c.lineWidth=3;c.lineCap='round';c.beginPath();c.moveTo(o.x,o.y);c.quadraticCurveTo(o.x+sw*.3,o.y-hh*.55,o.x+sw,o.y-hh);c.stroke();
   c.fillStyle=rgb(mixc([90,185,80],p[4],.25));for(const sg of[-1,1]){c.beginPath();c.ellipse(o.x+sw*.15+sg*7*gr,o.y-hh*.4,8*gr,3.5*gr,sg*-.6,0,TAU);c.fill()}

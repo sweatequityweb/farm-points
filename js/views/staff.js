@@ -1,3 +1,4 @@
+import {annTab} from "./announce.js";
 import {standing} from "../domain/pace.js";
 import {availText,ctc,legacyPods,podChip,podNums,roleChips,winChip} from "../domain/pods.js";
 import {hhName,target} from "../domain/points.js";
@@ -18,7 +19,7 @@ function staffView(){
   const pendL=S.att.filter(a=>a.status==='pending').sort((a,b)=>a.timeIn>b.timeIn?1:-1);
   const pendU=S.users.filter(u=>u.status==='pending');
   const n=pendL.length+pendU.length,adm=S.role==='admin';
-  const tabs=adm?[['dash','Dashboard','dash'],['approvals','Approvals','check',n],['households','Households','people'],['history','History','history'],['farm','Farm','eco',0,1],['users','Users','person',0,1],['settings','Settings','tune',0,1]]:[['approvals','Approvals','check',n],['households','Households','people'],['farm','Farm','eco'],['history','History','history']];
+  const tabs=adm?[['dash','Dashboard','dash'],['approvals','Approvals','check',n],['households','Households','people'],['history','History','history'],['ann','Announce','campaign'],['farm','Farm','eco',0,1],['users','Users','person',0,1],['settings','Settings','tune',0,1]]:[['approvals','Approvals','check',n],['households','Households','people'],['farm','Farm','eco'],['history','History','history'],['ann','Announce','campaign']];
   if(!tabs.some(t=>t[0]===S.tab))S.tab=adm?'dash':'approvals';
   $('#nav').innerHTML=tabs.map(([k,l,i,b,sec])=>navBtn(l,i,S.tab===k,`S_.tab='${k}';A.r()`,b,sec?'sec':'')).join('')+(adm?navBtn('More','more',tabs.some(t=>t[4]&&t[0]===S.tab),'A.moreMenu()',0,'more'):'');
   let h='';
@@ -34,6 +35,7 @@ function staffView(){
     <div class="row" style="flex-wrap:nowrap;align-items:flex-end;margin-bottom:6px"><div class="grow" style="min-width:0"><label for="hs" style="margin-top:0">Sort by</label><select id="hs" onchange="this.blur();S_.hsort=this.value;A.r()">${Object.entries(SORTS).map(([k,l])=>`<option value="${k}"${hs===k?' selected':''}>${l}</option>`).join('')}</select></div><div class="grow" style="min-width:0"><label for="hp" style="margin-top:0">Show</label><select id="hp" onchange="this.blur();S_.hpod=this.value;A.r()">${popt.map(([k,l])=>`<option value="${esc(k)}"${hp===k?' selected':''}>${esc(l)}</option>`).join('')}</select></div></div>
     ${list.length?list.map(id=>{const x=S.hh[id],p=P[id],t=target(x),[st,c]=standing(x,p);
       return `<div class="log" onclick="A.hhModal('${id}')" style="cursor:pointer"><div class="row sp"><b>${id} \u00b7 ${esc(x.name)}</b><span class="chip ${c}">${st}</span></div><div class="mut">${esc(x.barangay||'')} \u00b7 ${p}/${t} pts${x.targetType==='adjusted'?' \u00b7 adjusted':''}</div><div class="row" style="gap:6px;margin:4px 0 2px">${podChip(x.pod)}${winChip(x)}${roleChips(id)}</div><div class="mut" style="margin-bottom:6px">${availText(x.availability)}</div><div class="bar"><i style="width:${Math.min(100,p/t*100)}%"></i></div></div>`}).join(''):(total?'<p class="mut">No households match this filter.</p>':'<p class="mut">No households yet.'+(adm?' Import the Excel file in Settings.':'')+'</p>')}</div>`;
+  }else if(S.tab==='ann'){h+=annTab();
   }else if(S.tab==='dash'){h+=dashView();
   }else if(S.tab==='history'){h+=historyView();
   }else if(S.tab==='farm'){h+=farmView();

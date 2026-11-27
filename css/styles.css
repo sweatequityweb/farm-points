@@ -33,9 +33,7 @@ nav button.on{color:var(--txt)}nav button.on .ni{background:var(--pc);color:var(
 nav button .l{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .badge{position:absolute;top:-4px;right:8px;background:var(--void);color:#fff;border-radius:8px;font-size:11px;line-height:16px;min-width:16px;padding:0 4px;text-align:center}
 .more{display:flex}.sec{display:none!important}
-@media(min-width:900px){body:has(#nav:not([hidden])){padding-left:96px;padding-bottom:24px}
- nav{top:0;bottom:0;right:auto;width:96px;flex-direction:column;justify-content:flex-start;padding:16px 0 0;gap:6px;box-shadow:1px 0 3px rgba(0,0,0,.1)}
- nav button{flex:none;min-height:68px;padding:6px 2px}.sec{display:flex!important}.more{display:none!important}}
+@media(min-width:900px){.sec{display:flex!important}.more{display:none!important}}
 #modal{position:fixed;inset:0;background:rgba(25,29,23,.5);display:none;align-items:flex-end;justify-content:center;z-index:20}
 #modal.show{display:flex}.sheet{background:var(--card);width:100%;max-width:560px;border-radius:28px 28px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom));max-height:90vh;overflow:auto;box-shadow:var(--sh2)}
 .sheet::before{content:'';display:block;width:32px;height:4px;border-radius:2px;background:var(--ol);opacity:.4;margin:-8px auto 12px}
@@ -169,3 +167,30 @@ body.elder{font-size:17px}body.elder .mut{font-size:15px}body.elder .chip{font-s
 body.elder button{min-height:56px;font-size:16px}body.elder .card h2{font-size:19px}
 body.elder nav button{min-height:64px}body.elder nav .l{font-size:13px}body.elder .log{padding-top:14px;padding-bottom:14px}
 @media(prefers-reduced-motion:reduce){.rb.has .bdg,.rb.has svg,.clockbtn::after{animation:none!important}}
+
+/* header never overlaps; desktop is a centred feed */
+header{gap:8px}header .brand{flex:1 1 auto;min-width:0;overflow:hidden}header .brand>div{min-width:0;overflow:hidden}
+header h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}header small{max-width:100%}
+.hact .text{padding:0 8px;min-height:44px;font-size:14px}
+@media(min-width:760px){header{padding-left:max(14px,calc(50% - 480px));padding-right:max(12px,calc(50% - 480px))}nav{justify-content:center}nav button{flex:0 1 128px}}
+@media(max-width:380px){header h1{font-size:18px}.logo{width:34px;height:34px;font-size:18px}}
+/* announcements: markdown + writing sheet */
+.md{margin-top:8px;line-height:1.5;overflow-wrap:anywhere}.md>:first-child{margin-top:0}.md>:last-child{margin-bottom:0}
+.md p{margin:0 0 8px}.md h3,.md h4,.md h5{margin:10px 0 4px;line-height:1.25}.md h3{font-size:1.2em}.md h4{font-size:1.1em}.md h5{font-size:1em}
+.md ul,.md ol{margin:0 0 8px;padding-left:22px}.md a{color:#1565c0;text-decoration:underline;font-weight:500}
+.md blockquote{margin:0 0 8px;padding:6px 12px;border-left:4px solid #81c784;background:#f1f8ee;border-radius:0 8px 8px 0}
+.md code{background:#eef0ee;padding:1px 6px;border-radius:6px;font-size:.92em}.md pre{background:#eef0ee;padding:10px;border-radius:10px;overflow:auto}.md hr{border:0;border-top:1px solid var(--line);margin:10px 0}
+.clampbox{max-height:5.2em;overflow:hidden;-webkit-mask-image:linear-gradient(#000 65%,transparent);mask-image:linear-gradient(#000 65%,transparent)}
+.tbar{display:flex;gap:6px;margin-bottom:6px}.tbb{min-height:44px;padding:0 16px;border-radius:12px;background:#eef1ee;color:var(--txt);border:1px solid var(--line)}
+.emos{display:flex;gap:4px;overflow-x:auto;padding:8px 0}.emos button{flex:none;min-height:44px;width:44px;padding:0;font-size:22px;background:#f4f6f4;border-radius:12px}
+.pv{min-height:60px;padding:12px;border:1px dashed var(--ol);border-radius:12px;background:#fafcfa}textarea{resize:vertical}
+/* polish: round bell, calmer pulse, centred empty cells, readable staff tabs, tighter lists */
+.rb{flex:none;min-width:44px;max-width:44px;aspect-ratio:1}
+.hact{padding-top:2px}
+@keyframes bpulse{0%{box-shadow:0 0 0 0 rgba(228,30,63,.65);transform:scale(1)}12%{transform:scale(1.2)}26%{transform:scale(1)}100%{box-shadow:0 0 0 9px rgba(228,30,63,0)}}
+.wz{display:grid;place-items:center;min-height:62px}
+body:not(.elder) nav button .l{font-size:11px;letter-spacing:-.2px;white-space:nowrap}
+body:not(.elder) nav button{flex:1 0 56px;padding-left:2px;padding-right:2px}
+.md li{margin:2px 0}.md li>p{margin:0}
+.rb,body.elder .rb{width:44px;height:44px;min-height:44px;border-radius:50%}
+@media(min-width:760px){body:not(.elder) nav button .l{font-size:13px;letter-spacing:0}}

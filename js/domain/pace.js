@@ -17,13 +17,13 @@ function paceInfo(h,p){const c=S.cfg,t=target(h),adj=h?.targetType==='adjusted',
   const key=p>=goal?'ahead':p>=exp-grace?'on':p>=exp*ratio-grace?'catch':'help',toPace=Math.max(0,Math.ceil(exp-grace-p)),toGoal=Math.max(0,goal-p);
   return{key,label:TIER[key][0],cls:TIER[key][1],mode:'pace',expected:Math.round(exp),goal,term:cur.name,end:cur.end,toGoal,goalDays:Math.ceil(toGoal/ppd),paceDays:Math.ceil(toPace/ppd),daysLeft:dn(cur.end)-dn(today)}}
 function standing(h,p){const i=paceInfo(h,p);return[i.label,i.cls]}
-const paceMsg=i=>{const d=n=>n+' more work day'+(n===1?'':'s'),by=i.mode==='pace'?i.term+' ends '+fmtD(i.end)+'.':'';
+const paceMsg=i=>{const d=n=>n+' more work day'+(n===1?'':'s');
   if(i.mode==='none')return'';
   if(i.mode==='annual')return i.need?d(i.days)+' would reach the full-year goal.':'You have reached the full-year goal. Thank you!';
   if(i.key==='ahead')return 'You have already met the '+i.term+' goal. Every extra day is a bonus for the farm.';
-  if(i.key==='on')return 'Right on pace. '+d(i.goalDays)+' will complete '+i.term+'. '+by;
-  if(i.key==='catch')return 'A little behind pace. '+d(i.paceDays)+' brings you back on pace. '+by;
-  return 'We can catch up together. '+d(i.paceDays)+' brings you back on pace, and the Farm Liaison can help with make-up days. '+by};
+  if(i.key==='on')return d(i.goalDays)+' will complete '+i.term+'.';
+  if(i.key==='catch')return d(i.paceDays)+' brings you back on pace.';
+  return d(i.paceDays)+' brings you back on pace. The Farm Liaison can help with make-up days.'};
 function paceCounts(){const c={ahead:0,on:0,catch:0,help:0};let mode='';Object.keys(S.hh).forEach(id=>{const i=paceInfo(S.hh[id],pts(id));if(c[i.key]!==undefined)c[i.key]++;mode=mode||i.mode});return{c,mode}}
 
 export {TIER,datedTerms,dn,paceCounts,paceInfo,paceMsg,standing};
