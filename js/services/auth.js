@@ -8,7 +8,7 @@ import {isStaff,toD,toast,uid,ymd} from "../util.js";
 function clearSubs(){if(S._cmdUn)S._cmdUn();S._cmdUn=null;S._cmdKey='';S.unsubs.forEach(u=>u());S.unsubs=[];clearInterval(S.timer)}
 const sub=(ref,cb)=>S.unsubs.push(onSnapshot(ref,cb,e=>{console.error(e);toast('Permission or network error: '+e.code)}));
 onAuthStateChanged(auth,user=>{
-  clearSubs();S.user=user;S.profile=undefined;S.hh={};S.att=[];S.users=[];S.podHh={};S.podAtt=[];S._pod=null;S._pn0=null;S._hhSub=false;S.contacts={};S.pp={};S.holders={};S.myContact=null;S.myPp=null;S.podContacts={};S.podPts={};S.reqFrom=[];S.reqTo=[];S._attOk=false;S._cfgOk=false;S.years=[];S.events=[];S.harv=[];S.plant=[];S.fstats=null;S.claimSel=null;S.claimQ='';S._dirTried=false;
+  clearSubs();S.user=user;S.profile=undefined;S.hh={};S.att=[];S.users=[];S.podHh={};S.podAtt=[];S._pod=null;S._pn0=null;S._hhSub=false;S.contacts={};S.pp={};S.holders={};S.myContact=null;S.myPp=null;S.podContacts={};S.podPts={};S.reqFrom=[];S.reqTo=[];S._attOk=false;S._cfgOk=false;S.ann=[];S.sum=null;S.years=[];S.events=[];S.harv=[];S.plant=[];S.fstats=null;S.claimSel=null;S.claimQ='';S._dirTried=false;
   if(!user){S.role=null;return render()}
   const em=(user.email||'').toLowerCase();
   S.role=em===ADMIN_EMAIL?'admin':em===LIAISON_EMAIL?'liaison':'parent';S.tab=S.role==='admin'?'dash':'approvals';
@@ -26,6 +26,7 @@ onAuthStateChanged(auth,user=>{
     sub(collection(db,'harvests'),s=>{S.harv=s.docs.map(d=>({id:d.id,...d.data()}));if(S._pushPending){S._pushPending=false;pushStats()}render()});
     sub(collection(db,'plantings'),s=>{S.plant=s.docs.map(d=>({id:d.id,...d.data()}));render()});
     sub(collection(db,'users'),s=>{S.users=s.docs.map(d=>({id:d.id,...d.data()}));S.users.forEach(u=>sweep(u.id,u));render()});
+    sub(collection(db,'announcements'),s=>{S.ann=s.docs.map(d=>({id:d.id,...d.data()})).sort((x,y)=>(y.createdAt||0)-(x.createdAt||0));render()});
     if(S.role==='admin'){sub(collection(db,'years'),s=>{S.years=s.docs.map(d=>d.data());render()});sub(collection(db,'yearEvents'),s=>{S.events=s.docs.map(d=>({id:d.id,...d.data()}));render()})}
   }else{
     sub(doc(db,'users',user.uid),s=>{
@@ -42,6 +43,8 @@ onAuthStateChanged(auth,user=>{
         sub(doc(db,'contacts',id),x=>{S.myContact=x.exists()?x.data():null;render()});
         sub(doc(db,'podpoints',id),x=>{S.myPp=x.exists()?x.data():null;render()});
         sub(query(collection(db,'plantings'),where('hhId','==',id)),x=>{S.plant=x.docs.map(d=>({id:d.id,...d.data()}));render()});
+        sub(collection(db,'announcements'),x=>{S.ann=x.docs.map(d=>({id:d.id,...d.data()})).sort((p,q)=>(q.createdAt||0)-(p.createdAt||0));render()});
+        sub(doc(db,'summary','dashboard'),x=>{S.sum=x.exists()?x.data():null;render()});
         sub(doc(db,'farmstats','summary'),x=>{S.fstats=x.exists()?x.data():null;render()});
         sub(query(collection(db,'requests'),where('fromHh','==',id)),x=>{S.reqFrom=x.docs.map(d=>({id:d.id,...d.data()}));render()});
         sub(query(collection(db,'requests'),where('toHh','==',id)),x=>{S.reqTo=x.docs.map(d=>({id:d.id,...d.data()}));render()});

@@ -3,8 +3,8 @@ import {inApp,inAppNotice} from "../ui/inapp.js";
 import {natCmp} from "../domain/pods.js";
 import {A,S} from "../state.js";
 import {$,esc} from "../util.js";
-function loginView(){return `<div class="center"><div class="heroc"><div style="font-size:64px">🥬</div><h1 style="margin:0;color:var(--pri-d)">Ugnayan Gulayan</h1><p class="mut">Farm attendance and points for Noah Scholarship households</p>
-${inApp()?inAppNotice():`<button style="width:100%;max-width:340px;min-height:56px" onclick="A.google()">Sign in with Google</button>`}
+function loginView(){if(inApp())return inAppNotice();return `<div class="center"><div class="heroc"><div style="font-size:64px">🥬</div><h1 style="margin:0;color:var(--pri-d)">Ugnayan Gulayan</h1><p class="mut">Farm attendance and points for Noah Scholarship households</p>
+<button style="width:100%;max-width:340px;min-height:56px" onclick="A.google()">Sign in with Google</button>
 ${S.showStaff?`<div class="card"><h2>Staff sign in</h2><label>Email</label><input id="em" type="email" autocomplete="username"><label>Password</label><input id="pw" type="password" autocomplete="current-password"><div style="margin-top:14px"><button style="width:100%" onclick="A.emailLogin()">Sign in</button></div></div>`:`<button class="text" onclick="S_.showStaff=true;A.r()">Staff sign in</button>`}<div><button class="text" onclick="A.sceneToggle()">🌿 Animated scenery: ${sceneOn()?'on':'off'}</button></div></div></div>`}
 const claimLabel=(id,n,sc)=>`<b>${esc(id)}</b> ${esc(n)}${sc&&sc.length?` <span class="mut">(${sc.map(esc).join(', ')})</span>`:''}`;
 function claimRows(q){const d=S.cfg.directory||{},ds=S.cfg.claimNames===false?{}:(S.cfg.dirScholars||{}),ql=String(q||'').toLowerCase();

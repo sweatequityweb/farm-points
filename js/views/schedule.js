@@ -1,5 +1,5 @@
 import {A,S} from "../state.js";
-import {esc,ymd} from "../util.js";
+import {esc,isStaff,ymd} from "../util.js";
 import {DAYS,availChips,natCmp,podLabel,podNums,slotGrid,wSort,winById,winLabel} from "../domain/pods.js";
 import {open_} from "../ui/render.js";
 /* Weekly schedule built from S.cfg.windows (day + start/end + pod) and each household's window. */
@@ -9,19 +9,20 @@ function weekDays(off){const s=new Date();s.setHours(0,0,0,0);s.setDate(s.getDat
   return DAYS.map(([k,full],i)=>{const d=new Date(s);d.setDate(s.getDate()+i);return{k,full,d,date:ymd(d)}})}
 const slotOf=a=>{const d=new Date(a.timeIn);return(isNaN(d)?8:d.getHours())<12?'AM':'PM'};
 const PERS=[['AM','Morning'],['PM','Afternoon']];
-function availMap(){const m={},pod=S.schedPod||'all';Object.entries(S.hh).forEach(([id,h])=>{if(pod!=='all'&&String(h.pod||'')!==pod)return;(h.availability||[]).forEach(k=>(m[k]??=[]).push(id))});Object.values(m).forEach(a=>a.sort(natCmp));return m}
+function availMap(){const m={},pod=S.schedPod||'all';if(!isStaff()){Object.entries(S.sum?.sched||{}).forEach(([k,n])=>m[k]=Array(n).fill(''));return m}Object.entries(S.hh).forEach(([id,h])=>{if(pod!=='all'&&String(h.pod||'')!==pod)return;(h.availability||[]).forEach(k=>(m[k]??=[]).push(id))});Object.values(m).forEach(a=>a.sort(natCmp));return m}
 const cameSet=(date,per)=>new Set(S.att.filter(a=>a.date===date&&a.status!=='voided'&&a.kind!=='buyout'&&slotOf(a)===per).map(a=>a.hhId));
 function cellHtml(day,per,m,today,max,empty){const n=(m[day.k+'-'+per]||[]).length;if(!n)return`<span class="wz">${empty}</span>`;
   const past=day.date<=today,a=.18+.72*n/max;
-  return`<button type="button" class="wsl${n===1?' thin':a>.5?' hi':''}" style="--a:${a.toFixed(2)}" aria-label="${day.full} ${per==='AM'?'morning':'afternoon'}: ${n} household${n===1?'':'s'} available" onclick="A.schedCell('${day.k}','${per}','${day.date}')"><b>${n}</b><span>available</span>${past?`<small>${cameSet(day.date,per).size} came</small>`:''}</button>`}
+  const st=isStaff(),tag=st?'button type="button"':'div';
+  return`<${tag} class="wsl${n===1?' thin':a>.5?' hi':''}" style="--a:${a.toFixed(2)}" aria-label="${day.full} ${per==='AM'?'morning':'afternoon'}: ${n} household${n===1?'':'s'} available"${st?` onclick="A.schedCell('${day.k}','${per}','${day.date}')"`:''}><b>${n}</b><span>available</span>${past&&st?`<small>${cameSet(day.date,per).size} came</small>`:''}</${st?'button':'div'}>`}
 function scheduleCard(){const o=S.schedWk||0,days=weekDays(o),today=ymd(new Date()),f=d=>d.toLocaleDateString('en-PH',{month:'short',day:'numeric'}),m=availMap(),max=Math.max(1,...Object.values(m).map(a=>a.length)),
-  none=Object.values(S.hh).filter(h=>!(h.availability||[]).length).length,pods=podNums(),
+  none=isStaff()?Object.values(S.hh).filter(h=>!(h.availability||[]).length).length:0,pods=isStaff()?podNums():[],
   head=`<div class="row sp"><h2 style="margin:0">Schedule</h2><div class="row" style="gap:4px"><button class="sm ghost" aria-label="Previous week" onclick="A.schedWk(-1)">‹</button><button class="sm ghost" onclick="A.schedWk(0)">This week</button><button class="sm ghost" aria-label="Next week" onclick="A.schedWk(1)">›</button></div></div>
   <div class="row sp" style="margin:6px 0 10px;gap:8px"><span class="mut">${f(days[0].d)} – ${f(days[6].d)} · households available at the farm</span>${pods.length>1?`<select aria-label="Pod" style="width:auto;min-height:36px" onchange="A.schedPod(this.value)"><option value="all">All pods</option>${pods.map(n=>`<option value="${n}"${S.schedPod===n?' selected':''}>${esc(podLabel(n))}</option>`).join('')}</select>`:''}</div>`;
   if(Object.keys(m).length===0)return`<div class="card wide">${head}<p class="mut" style="margin:0">No availability set yet. Set it in each household, under “Available at the farm”.</p></div>`;
   const table=`<div class="wkt"><div class="wkr hd"><span></span>${days.map(d=>`<span class="${d.date===today?'tdy':''}">${d.k}<small>${d.d.getDate()}</small></span>`).join('')}</div>${PERS.map(([p,l])=>`<div class="wkr"><span class="pl">${l}</span>${days.map(d=>`<div class="wcell${d.date===today?' tdy':''}">${cellHtml(d,p,m,today,max,'–')}</div>`).join('')}</div>`).join('')}</div>`,
   agenda=`<div class="wagw">${days.map(d=>`<div class="wag${d.date===today?' tdy':''}"><div class="wad"><b>${d.k}</b><small>${f(d.d)}</small></div><div class="wap">${PERS.map(([p,l])=>`<div><i>${l}</i>${cellHtml(d,p,m,today,max,'None')}</div>`).join('')}</div></div>`).join('')}</div>`;
-  return`<div class="card wide">${head}${table}${agenda}<p class="mut" style="margin:10px 0 0;font-size:12px">The number is how many households can come. Tap a slot to see who. Amber means only one household, and a work day needs at least two.${none?` ${none} household${none===1?' has':'s have'} not set availability yet.`:''}</p></div>`}
+  return`<div class="card wide">${head}${table}${agenda}<p class="mut" style="margin:10px 0 0;font-size:12px">The number is how many households can come. ${isStaff()?'Tap a slot to see who. ':''}Amber means only one household, and a work day needs at least two.${none?` ${none} household${none===1?' has':'s have'} not set availability yet.`:''}</p></div>`}
 /* Household modal: availability + the window it leads to, in one place. */
 function schedSection(id,x,adm){const av=new Set(x.availability||[]),w=winById(x.window),
   fits=(S.cfg.windows||[]).filter(v=>String(v.pod)===String(x.pod)&&v.id!==x.window&&av.has(winKey(v))).sort(wSort),

@@ -1,3 +1,4 @@
+import {closeModal} from "../ui/nav.js";
 import {inApp} from "../ui/inapp.js";
 import {DEF} from "../config.js";
 import {allLogs,findLog} from "../domain/commander.js";
@@ -11,15 +12,15 @@ import {$,fmtT,guard,hrs,inRange,inYear,toast,uid,yearOver,ymd} from "../util.js
 import {inWin} from "../views/parent.js";
 /* ---------- actions ---------- */
 Object.assign(A,{
-  r:render,close:()=>{$('#modal').classList.remove('show');S._reModal=null},
+  r:render,close:()=>closeModal(),
   google:guard(()=>inApp()?toast('Open this page in your browser to sign in with Google'):signInWithPopup(auth,new GoogleAuthProvider())),
   emailLogin:guard(async()=>{try{await signInWithEmailAndPassword(auth,$('#em').value.trim(),$('#pw').value)}catch(e){toast('Check your email and password')}}),
   logout:()=>{S._hhSub=false;signOut(auth)},
   claim:guard(async()=>{const id=S.claimSel;if(!id)return toast('Choose your household');
     await setDoc(doc(db,'users',S.user.uid),{email:S.user.email.toLowerCase(),role:'parent',householdId:id,status:'pending'})}),
   cancelClaim:guard(async()=>{await deleteDoc(doc(db,'users',S.user.uid))}),
-  clockIn:guard(async()=>{if(yearOver())return toast('The program year has ended');if(!inWin())return toast('Clock-in is closed right now');if(!confirm('Start your work day now?'))return;await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:new Date().toISOString()});toast('Clocked in')}),
-  clockOutModal:()=>open_(`<h2>Clock out</h2><p class="mut">Worked ${hrs((Date.now()-new Date(S.profile.activeClockIn))/36e5)}</p><label>What did you work on?</label><input id="cn" placeholder="e.g. Weeding"><label>How many people worked today, including you?</label><div class="row" style="flex-wrap:nowrap;justify-content:center"><button type="button" class="ghost" style="width:56px;padding:0;font-size:24px" aria-label="One less" onclick="A.step('cg',-1)">\u2212</button><input id="cg" type="number" min="1" max="${S.cfg.maxGuests+1}" inputmode="numeric" value="1" style="text-align:center;font-size:22px;width:80px;flex:none" oninput="A.pplHint()"><button type="button" class="ghost" style="width:56px;padding:0;font-size:24px" aria-label="One more" onclick="A.step('cg',1)">+</button></div><p id="cgh" class="mut" style="text-align:center;margin:6px 0 0">Just you</p><label>Who came with you? (optional)</label><input id="cgn" placeholder="e.g. Ate Mila, Jun"><div class="row" style="margin-top:14px"><button class="red" onclick="A.clockOut()">Clock out and submit</button><button class="ghost" onclick="A.close()">Keep working</button></div>`),
+  clockIn:guard(async()=>{if(yearOver())return toast('The program year has ended');if(!inWin())return toast('Clock-in is closed right now');await updateDoc(doc(db,'users',S.user.uid),{activeClockIn:new Date().toISOString()});toast('Clocked in')}),
+  clockOutModal:()=>open_(`<h2>Clock out</h2><p class="mut">Worked ${hrs((Date.now()-new Date(S.profile.activeClockIn))/36e5)}</p><label>What did you work on?</label><input id="cn" placeholder="e.g. Weeding"><label>How many people worked today, including you?</label><div class="row" style="flex-wrap:nowrap;justify-content:center"><button type="button" class="ghost" style="width:56px;padding:0;font-size:24px" aria-label="One less" onclick="A.step('cg',-1)">\u2212</button><input id="cg" type="number" min="1" max="${S.cfg.maxGuests+1}" inputmode="numeric" value="1" style="text-align:center;font-size:22px;width:80px;flex:none" oninput="A.pplHint()"><button type="button" class="ghost" style="width:56px;padding:0;font-size:24px" aria-label="One more" onclick="A.step('cg',1)">+</button></div><p id="cgh" class="mut" style="text-align:center;margin:6px 0 0">Just you</p><label>Who came with you? (optional)</label><input id="cgn" placeholder="e.g. Ate Mila, Jun"><div class="row" style="margin-top:14px"><button class="red" onclick="FX.play('burst',this);A.clockOut()">Clock out and submit</button><button class="ghost" onclick="A.close()">Keep working</button></div>`),
   clockOut:guard(async()=>{
     const tin=new Date(S.profile.activeClockIn),tout=new Date(),dur=Math.round((tout-tin)/36e3)/100;
     await addDoc(collection(db,'attendance'),{hhId:S.profile.householdId,pod:S.hh[S.profile.householdId]?.pod||'',date:ymd(tin),timeIn:tin.toISOString(),timeOut:tout.toISOString(),durationHours:dur,note:$('#cn').value.trim(),guests:Math.min(Math.max((parseInt($('#cg').value)||1)-1,0),S.cfg.maxGuests),guestNames:($('#cgn').value||'').trim().slice(0,150),status:'pending',points:0,loggedBy:S.user.uid,approvedBy:''});

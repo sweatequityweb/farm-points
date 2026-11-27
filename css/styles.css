@@ -116,3 +116,56 @@ main .card>h2::before,main .card .row>h2::before{content:"";display:inline-block
 .hero{background:linear-gradient(160deg,#e8f5e9,#e3f2fd)!important;border-top:3px solid #81c784}
 nav button.on .ni{background:linear-gradient(135deg,#c8e6c9,#bbdefb)}
 .log[data-s]{padding-left:12px}.log.tap{padding-right:10px;border-radius:10px}
+/* ===== Facebook-style layout: top bar + icon tabs, grey feed, white rounded cards ===== */
+:root{--bg:#f0f2f5}
+body{padding-bottom:28px}
+#top{position:sticky;top:0;z-index:6}
+header{position:static;background:#fff;box-shadow:none;min-height:60px;padding:calc(8px + env(safe-area-inset-top)) 12px 8px 14px}
+header .brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{flex:none;width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#81c784,#2e7d32);display:grid;place-items:center;font-size:22px}
+header h1{font-size:21px;font-weight:700;color:#2e7d32;letter-spacing:-.2px}
+.hact{display:flex;align-items:center;gap:6px;flex:none}.hact>span{display:flex}
+nav{position:static;display:flex;overflow-x:auto;padding:0;background:#fff;border-top:1px solid #e4e6eb;box-shadow:0 2px 3px rgba(0,0,0,.1);scrollbar-width:none}nav::-webkit-scrollbar{display:none}
+nav button{flex:1 0 66px;min-height:58px;padding:8px 4px 6px;border-radius:0;color:#65676b;border-bottom:3px solid transparent;gap:2px}
+nav button .ni{width:auto;height:auto;border-radius:0;background:none!important;position:relative}
+nav button.on{color:var(--pri);border-bottom-color:var(--pri)}nav button.on .ni{background:none!important;color:var(--pri)}
+nav button:hover{background:#f2f3f5;filter:none}
+nav .badge{position:absolute;top:-6px;right:-12px}
+main{padding:10px 8px}
+.card,main .card:not(.hero):not(.claim){border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.14);background:#fff;border-top:0;padding:16px;margin-bottom:10px}
+.card h2{font-weight:700}
+/* bell */
+.rb{width:44px;height:44px;min-height:44px;padding:0;border-radius:50%;background:#e4e6eb;color:#050505;display:grid;place-items:center;position:relative;filter:none}
+.rb:hover{background:#d8dadf;filter:none}
+.rb .bdg{position:absolute;top:-4px;right:-4px;min-width:22px;height:22px;padding:0 5px;border-radius:11px;background:#e41e3f;color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;border:2px solid #fff}
+.rb.has .bdg{animation:bpulse 1.8s ease-out infinite}.rb.has svg{animation:bring 3.6s ease-in-out infinite;transform-origin:50% 8%}
+@keyframes bpulse{0%{box-shadow:0 0 0 0 rgba(228,30,63,.7);transform:scale(1)}12%{transform:scale(1.22)}26%{transform:scale(1)}100%{box-shadow:0 0 0 15px rgba(228,30,63,0)}}
+@keyframes bring{0%,58%,100%{transform:rotate(0)}63%{transform:rotate(16deg)}68%{transform:rotate(-14deg)}73%{transform:rotate(10deg)}78%{transform:rotate(-6deg)}83%{transform:rotate(0)}}
+.ann{padding:12px;border-radius:12px;background:#f7f8fa;margin-bottom:10px}.ann.new{background:#fff4e0;border:1px solid #ffe0b2}.ann.form{background:#f0f7ee}
+.annc{cursor:pointer}.annc h2{display:flex;align-items:center;gap:8px;color:var(--pri-d)}.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* home hero: points ring + clock-in in one card */
+.hero2{text-align:center;padding:18px 16px 16px}
+.who{display:flex;align-items:center;gap:12px;text-align:left;margin-bottom:6px}
+.av{flex:none;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#81c784,#4db6ac);color:#fff;display:grid;place-items:center;font-size:24px;font-weight:700}
+.hn{font-size:21px;font-weight:700;line-height:1.2}
+.goal{font-size:1.1em;font-weight:500;margin:2px 0 14px;color:var(--pri-d)}
+.timer{font-size:44px;font-weight:700;color:var(--pri-d);line-height:1.1}.working{margin-bottom:12px}
+.cnote{margin:10px 0 0;font-size:13px}
+.clockbtn{position:relative;overflow:hidden;width:100%;min-height:76px;border-radius:38px;background:linear-gradient(135deg,#43a047,#00897b);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;line-height:1.15;box-shadow:0 4px 12px rgba(46,125,50,.35)}
+.clockbtn span{font-size:24px;font-weight:700;letter-spacing:.5px}.clockbtn small{font-size:14px;font-weight:400;opacity:.92}
+.clockbtn.out{background:linear-gradient(135deg,#e53935,#c62828);box-shadow:0 4px 12px rgba(198,40,40,.35)}
+.clockbtn:disabled{background:#d9ded6;box-shadow:none;color:#8b9187}
+.clockbtn:not(:disabled)::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 35%,rgba(255,255,255,.45) 50%,transparent 65%);transform:translateX(-120%);animation:fxsh 4s ease-in-out 1s infinite}
+.clockbtn:active{transform:scale(.98)}
+/* rainbow effect (engine: js/ui/fx.js) */
+.fx-rainbow{background:linear-gradient(90deg,#ef5350,#ffa726,#ffee58,#66bb6a,#42a5f5,#ab47bc,#ef5350)!important;background-size:300% 100%;animation:fxrb 1.2s linear 1}
+.fx-rainbow span,.fx-rainbow small{text-shadow:0 1px 3px rgba(0,0,0,.45)}
+.fx-rainbow::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.8) 50%,transparent 70%);transform:translateX(-120%);animation:fxsh .9s ease-out 1!important}
+.fx-pop{animation:fxpop .45s ease-out 1}
+@keyframes fxrb{to{background-position:300% 0}}@keyframes fxsh{to{transform:translateX(120%)}}@keyframes fxpop{40%{transform:scale(1.08)}}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}.stats b{display:block;font-size:30px;color:var(--pri-d);line-height:1.1}.stats span{font-size:13px;color:var(--mut)}
+/* bigger, clearer everything for parents */
+body.elder{font-size:17px}body.elder .mut{font-size:15px}body.elder .chip{font-size:14px;padding:4px 12px}
+body.elder button{min-height:56px;font-size:16px}body.elder .card h2{font-size:19px}
+body.elder nav button{min-height:64px}body.elder nav .l{font-size:13px}body.elder .log{padding-top:14px;padding-bottom:14px}
+@media(prefers-reduced-motion:reduce){.rb.has .bdg,.rb.has svg,.clockbtn::after{animation:none!important}}

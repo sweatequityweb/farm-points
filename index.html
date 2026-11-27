@@ -12,9 +12,8 @@
 </head>
 <body>
 <canvas id="bg" aria-hidden="true"></canvas>
-<header id="hdr" hidden><div><h1>Ugnayan Gulayan</h1><small id="sub"></small></div><button class="text" onclick="A.logout()">Sign out</button></header>
+<div id="top"><header id="hdr" hidden><div class="brand"><span class="logo" aria-hidden="true">🌱</span><div><h1>Ugnayan Gulayan</h1><small id="sub"></small></div></div><div class="hact"><span id="bell"></span><button class="text" onclick="A.logout()">Sign out</button></div></header><nav id="nav" hidden></nav></div>
 <main id="app"><div class="center">Loading…</div></main>
-<nav id="nav" hidden></nav>
 <div id="modal" onclick="if(event.target===this)A.close()"><div class="sheet" id="sheet"></div></div>
 <div id="toast"></div>
 

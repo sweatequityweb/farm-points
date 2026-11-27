@@ -1,3 +1,4 @@
+import {pushSummary} from "./summary.js";
 import {isNumPod,natCmp} from "./pods.js";
 import {pts} from "./points.js";
 import {db,doc,updateDoc} from "../firebase.js";
@@ -5,7 +6,7 @@ import {A,S} from "../state.js";
 import {isStaff} from "../util.js";
 let syncT;const schedSync=()=>{clearTimeout(syncT);syncT=setTimeout(syncPoints,1500)};
 async function syncPoints(){if(!S.user||!S._attOk||!S._cfgOk)return;
-  try{if(isStaff()){for(const id of Object.keys(S.pp)){const p=pts(id);if(S.pp[id].points!==p)await updateDoc(doc(db,'podpoints',id),{points:p})}}
+  try{if(isStaff()){await pushSummary();for(const id of Object.keys(S.pp)){const p=pts(id);if(S.pp[id].points!==p)await updateDoc(doc(db,'podpoints',id),{points:p})}}
   else if(S.profile?.status==='active'&&S.myPp){const id=S.profile.householdId,p=pts(id);if(S.myPp.points!==p)await updateDoc(doc(db,'podpoints',id),{points:p})}}catch(e){console.error(e)}}
 const SORTS={id:'Household ID',ptsDesc:'Most points',ptsAsc:'Fewest points',newest:'Newest added',name:'Name A\u2013Z',pod:'Pod'};
 function hhSorted(){let ids=Object.keys(S.hh);const P={};ids.forEach(i=>P[i]=pts(i));const f=S.hpod||'all',k=S.hsort||'id';
